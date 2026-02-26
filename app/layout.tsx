@@ -45,7 +45,7 @@ export default function RootLayout({
         <Script src="/js/jquery.min.js" strategy="beforeInteractive" />
         <Script src="/js/plugins.js" />
         <Script src="/js/SmoothScroll.js" />
-        <Script src="/js/script.min.js" />
+        {/* script.min.js removed - conflicts with React components (SwiperInit, AOSInit) */}
       </body>
     </html>
   );

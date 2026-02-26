@@ -7,15 +7,87 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ProductCarousel from "./components/ProductCarousel";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { getProductsGrid, Product } from "./lib/api/products";
 
 export default function Home() {
+  const [newArrivals, setNewArrivals] = useState<Product[]>([]);
+  const [bestSellers, setBestSellers] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
+    let isMounted = true;
+
     // Hide preloader when page loads
     const preloader = document.querySelector(".preloader");
     if (preloader) {
       preloader.classList.add("loaded");
     }
+
+    // Fetch products - only once on mount
+    const fetchProducts = async () => {
+      if (!isMounted) return;
+
+      try {
+        // Fetch new arrivals (published products, sorted by ID desc)
+        const newArrivalsRes = await getProductsGrid({
+          pageIndex: 0,
+          pageSize: 8,
+          sort: [{ field: "id", dir: "desc" }],
+          filter: {
+            logic: "and",
+            filters: [
+              { field: "isPublished", operator: "eq", value: true }
+            ]
+          }
+        });
+
+        if (!isMounted) return;
+
+        // Fetch best sellers (published products, can be sorted by sales later)
+        const bestSellersRes = await getProductsGrid({
+          pageIndex: 0,
+          pageSize: 8,
+          sort: [{ field: "id", dir: "desc" }],
+          filter: {
+            logic: "and",
+            filters: [
+              { field: "isPublished", operator: "eq", value: true }
+            ]
+          }
+        });
+
+        if (!isMounted) return;
+
+        if (newArrivalsRes) {
+          setNewArrivals(newArrivalsRes.data);
+        }
+        if (bestSellersRes) {
+          setBestSellers(bestSellersRes.data);
+        }
+      } catch (error: any) {
+        if (!isMounted) return;
+        // Silently fail for public users - products grid requires authentication
+        // Set empty arrays so page still renders
+        // Only log if it's not a 401 (unauthorized) or 404 (not found) error
+        if (error?.status !== 401 && error?.status !== 404 && error?.message?.includes('401') === false && error?.message?.includes('404') === false) {
+          console.error('Error fetching products:', error);
+        }
+        setNewArrivals([]);
+        setBestSellers([]);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchProducts();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (
@@ -220,18 +292,19 @@ export default function Home() {
         </div>
       </section>
 
-      <ProductCarousel
-        id="new-arrival"
-        title="Yeni Gelenler"
-        products={[
-          { id: 1, img: "product-item-1.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-          { id: 2, img: "product-item-2.jpg", title: "Baggie Tişört", price: "₺1.650" },
-          { id: 3, img: "product-item-3.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-          { id: 4, img: "product-item-4.jpg", title: "Krop Kazak", price: "₺1.500" },
-          { id: 5, img: "product-item-10.jpg", title: "Krop Kazak", price: "₺2.100" },
-        ]}
-        additionalClassName="new-arrival"
-      />
+      {!loading && (
+        <ProductCarousel
+          id="new-arrival"
+          title="Yeni Gelenler"
+          products={newArrivals.map((p) => ({
+            id: p.id,
+            img: p.thumbnailImageUrl || "/images/product-item-1.jpg",
+            title: p.name,
+            price: p.price ? `₺${p.price.toFixed(2)}` : "Fiyat Belirtilmemiş",
+          }))}
+          additionalClassName="new-arrival"
+        />
+      )}
 
       <section className="collection bg-light position-relative section-spacing">
         <div className="container">
@@ -269,19 +342,19 @@ export default function Home() {
         </div>
       </section>
 
-      <ProductCarousel
-        id="best-sellers"
-        title="En Çok Satanlar"
-        products={[
-          { id: 6, img: "product-item-4.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-          { id: 7, img: "product-item-3.jpg", title: "Baggie Tişört", price: "₺1.650" },
-          { id: 8, img: "product-item-5.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-          { id: 9, img: "product-item-6.jpg", title: "El Yapımı Krop Kazak", price: "₺1.500" },
-          { id: 10, img: "product-item-9.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.100" },
-          { id: 11, img: "product-item-10.jpg", title: "Pamuklu Krem Tişört", price: "₺2.100" },
-        ]}
-        additionalClassName="best-sellers"
-      />
+      {!loading && (
+        <ProductCarousel
+          id="best-sellers"
+          title="En Çok Satanlar"
+          products={bestSellers.map((p) => ({
+            id: p.id,
+            img: p.thumbnailImageUrl || "/images/product-item-1.jpg",
+            title: p.name,
+            price: p.price ? `₺${p.price.toFixed(2)}` : "Fiyat Belirtilmemiş",
+          }))}
+          additionalClassName="best-sellers"
+        />
+      )}
 
       <section className="testimonials section-spacing bg-light">
         <div className="section-header text-center">
@@ -315,11 +388,11 @@ export default function Home() {
         id="related-products"
         title="Beğenebileceğiniz Ürünler"
         products={[
-          { id: 12, img: "product-item-5.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-          { id: 13, img: "product-item-6.jpg", title: "Baggie Tişört", price: "₺1.650" },
-          { id: 14, img: "product-item-7.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-          { id: 15, img: "product-item-8.jpg", title: "El Yapımı Krop Kazak", price: "₺1.500" },
-          { id: 16, img: "product-item-1.jpg", title: "El Yapımı Krop Kazak", price: "₺2.100" },
+                { id: 12, img: "product-item-5.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
+                { id: 13, img: "product-item-6.jpg", title: "Baggie Tişört", price: "₺1.650" },
+                { id: 14, img: "product-item-7.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
+                { id: 15, img: "product-item-8.jpg", title: "El Yapımı Krop Kazak", price: "₺1.500" },
+                { id: 16, img: "product-item-1.jpg", title: "El Yapımı Krop Kazak", price: "₺2.100" },
         ]}
         additionalClassName="related-products"
       />

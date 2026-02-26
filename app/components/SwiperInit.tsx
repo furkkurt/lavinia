@@ -11,15 +11,19 @@ declare global {
 
 export default function SwiperInit() {
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let isMounted = true;
+
     // Wait for Swiper to be available
     const waitForSwiper = (callback: () => void, maxAttempts = 50) => {
       let attempts = 0;
       const checkSwiper = () => {
+        if (!isMounted) return; // Component unmounted, stop checking
         if (typeof window !== "undefined" && window.Swiper) {
           callback();
         } else if (attempts < maxAttempts) {
           attempts++;
-          setTimeout(checkSwiper, 100);
+          timeoutId = setTimeout(checkSwiper, 100);
         }
       };
       checkSwiper();
@@ -229,9 +233,30 @@ export default function SwiperInit() {
 
     // Wait for Swiper to load, then initialize
     waitForSwiper(() => {
+      if (!isMounted) return; // Component unmounted, don't initialize
       // Small delay to ensure DOM is fully rendered
-      setTimeout(initSwipers, 200);
+      timeoutId = setTimeout(initSwipers, 200);
     });
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      // Destroy all Swiper instances on unmount
+      if (typeof window !== "undefined" && window.Swiper) {
+        document.querySelectorAll(".swiper").forEach((el: any) => {
+          if (el.swiper) {
+            try {
+              el.swiper.destroy(true, true);
+            } catch (e) {
+              // Ignore errors during cleanup
+            }
+          }
+        });
+      }
+    };
   }, []);
 
   return null;

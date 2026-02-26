@@ -48,12 +48,15 @@ export default function ProductCarousel({
                     <div className="image-holder position-relative">
                       <Link href={`/products/${product.id}`}>
                         <Image
-                          src={`/images/${product.img}`}
+                          src={product.img.startsWith('http') ? product.img : `/images/${product.img}`}
                           alt={product.title}
                           className="product-image img-fluid"
                           width={300}
                           height={400}
                           unoptimized
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
+                          }}
                         />
                       </Link>
                       <Link href="/" className="btn-icon btn-wishlist">

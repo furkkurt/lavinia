@@ -13,48 +13,132 @@ import {
   GiDress,
   GiShorts
 } from "react-icons/gi";
+import { register, login, getCurrentUser, logout as apiLogout } from "../lib/api/auth";
 
 export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
-  const [registerForm, setRegisterForm] = useState({ username: "", email: "", password: "", confirmPassword: "" });
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [registerForm, setRegisterForm] = useState({ fullName: "", email: "", password: "", confirmPassword: "" });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in from localStorage
     const loggedIn = localStorage.getItem("isLoggedIn") === "true";
     setIsLoggedIn(loggedIn);
+    
+    // Try to get current user from API
+    if (loggedIn) {
+      checkAuthStatus();
+    }
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Mock login: admin/admin
-    if (loginForm.username === "admin" && loginForm.password === "admin") {
-      localStorage.setItem("isLoggedIn", "true");
-      setIsLoggedIn(true);
-      setShowLoginModal(false);
-      setLoginForm({ username: "", password: "" });
+  const checkAuthStatus = async () => {
+    // Since getCurrentUser endpoint doesn't exist, just check localStorage
+    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const userStr = localStorage.getItem("user");
+    
+    if (loggedIn && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        setIsLoggedIn(true);
+      } catch {
+        setIsLoggedIn(loggedIn);
+      }
     } else {
-      alert("Kullanıcı adı veya şifre hatalı!");
+      setIsLoggedIn(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    setIsLoggedIn(false);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const result = await login({
+        email: loginForm.email,
+        password: loginForm.password,
+      });
+
+      if (result.success) {
+        localStorage.setItem("isLoggedIn", "true");
+        setIsLoggedIn(true);
+        setShowLoginModal(false);
+        setLoginForm({ email: "", password: "" });
+        await checkAuthStatus();
+      } else {
+        alert(result.error || "E-posta veya şifre hatalı!");
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
+      alert(error.message || "Giriş yapılırken bir hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleLogout = async () => {
+    try {
+      await apiLogout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      localStorage.removeItem("isLoggedIn");
+      localStorage.removeItem("authToken");
+      setIsLoggedIn(false);
+      setCurrentUser(null);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (registerForm.password !== registerForm.confirmPassword) {
       alert("Şifreler eşleşmiyor!");
       return;
     }
-    // Mock register - just close modal
-    alert("Kayıt başarılı! (Mock)");
-    setShowRegisterModal(false);
-    setRegisterForm({ username: "", email: "", password: "", confirmPassword: "" });
+
+    if (registerForm.password.length < 6) {
+      alert("Şifre en az 6 karakter olmalıdır!");
+      return;
+    }
+
+    if (!registerForm.email || !registerForm.email.includes('@')) {
+      alert("Geçerli bir e-posta adresi giriniz!");
+      return;
+    }
+
+    if (!registerForm.fullName || registerForm.fullName.trim().length < 2) {
+      alert("Ad Soyad en az 2 karakter olmalıdır!");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await register({
+        fullName: registerForm.fullName.trim(),
+        email: registerForm.email.trim().toLowerCase(),
+        password: registerForm.password,
+      });
+
+      if (result.success) {
+        alert("Kayıt başarılı! Giriş yapabilirsiniz.");
+        setShowRegisterModal(false);
+        setShowLoginModal(true);
+        setRegisterForm({ fullName: "", email: "", password: "", confirmPassword: "" });
+      } else {
+        alert(result.error || "Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+      }
+    } catch (error: any) {
+      console.error("Register error:", error);
+      alert(error.message || "Kayıt sırasında bir hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -282,6 +366,15 @@ export default function Navbar() {
               <ul className="list-unstyled d-flex m-0 align-items-center" style={{ gap: "0.5rem", flexWrap: "nowrap" }}>
                 {isLoggedIn ? (
                   <>
+                    <li className="d-none d-xl-block">
+                      <Link
+                        href="/admin"
+                        className="text-uppercase mx-2"
+                        style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", color: "var(--bs-primary)" }}
+                      >
+                        Admin Panel
+                      </Link>
+                    </li>
                     <li className="d-none d-xl-block">
                       <span className="text-uppercase mx-2" style={{ whiteSpace: "nowrap", fontSize: "0.875rem", color: "var(--bs-primary)" }}>
                         Hoşgeldin Admin
@@ -557,15 +650,15 @@ export default function Navbar() {
               <form onSubmit={handleLogin}>
                 <div className="modal-body">
                   <div className="mb-3">
-                    <label htmlFor="loginUsername" className="form-label">
-                      Kullanıcı Adı
+                    <label htmlFor="loginEmail" className="form-label">
+                      E-posta
                     </label>
                     <input
-                      type="text"
+                      type="email"
                       className="form-control"
-                      id="loginUsername"
-                      value={loginForm.username}
-                      onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                      id="loginEmail"
+                      value={loginForm.email}
+                      onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
                       required
                     />
                   </div>
@@ -582,14 +675,13 @@ export default function Navbar() {
                       required
                     />
                   </div>
-                  <small className="text-muted">Mock: admin / admin</small>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowLoginModal(false)}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowLoginModal(false)} disabled={loading}>
                     İptal
                   </button>
-                  <button type="submit" className="btn btn-primary">
-                    Giriş Yap
+                  <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
                   </button>
                 </div>
               </form>
@@ -620,15 +712,15 @@ export default function Navbar() {
               <form onSubmit={handleRegister}>
                 <div className="modal-body">
                   <div className="mb-3">
-                    <label htmlFor="registerUsername" className="form-label">
-                      Kullanıcı Adı
+                    <label htmlFor="registerFullName" className="form-label">
+                      Ad Soyad
                     </label>
                     <input
                       type="text"
                       className="form-control"
-                      id="registerUsername"
-                      value={registerForm.username}
-                      onChange={(e) => setRegisterForm({ ...registerForm, username: e.target.value })}
+                      id="registerFullName"
+                      value={registerForm.fullName}
+                      onChange={(e) => setRegisterForm({ ...registerForm, fullName: e.target.value })}
                       required
                     />
                   </div>
@@ -673,11 +765,11 @@ export default function Navbar() {
                   </div>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowRegisterModal(false)}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowRegisterModal(false)} disabled={loading}>
                     İptal
                   </button>
-                  <button type="submit" className="btn btn-primary">
-                    Kayıt Ol
+                  <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? "Kaydediliyor..." : "Kayıt Ol"}
                   </button>
                 </div>
               </form>

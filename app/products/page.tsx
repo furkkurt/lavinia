@@ -6,10 +6,14 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { getProductsGrid, Product } from "../lib/api/products";
 
 export default function ProductsPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const productsPerPage = 8;
+  const productsPerPage = 12;
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     const preloader = document.querySelector(".preloader");
@@ -18,38 +22,51 @@ export default function ProductsPage() {
     }
   }, []);
 
-  const allProducts = [
-    { id: 1, img: "product-item-1.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-    { id: 2, img: "product-item-2.jpg", title: "Baggie Tişört", price: "₺1.650" },
-    { id: 3, img: "product-item-3.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-    { id: 4, img: "product-item-4.jpg", title: "Krop Kazak", price: "₺1.500" },
-    { id: 5, img: "product-item-5.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-    { id: 6, img: "product-item-6.jpg", title: "Baggie Tişört", price: "₺1.650" },
-    { id: 7, img: "product-item-7.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-    { id: 8, img: "product-item-8.jpg", title: "El Yapımı Krop Kazak", price: "₺1.500" },
-    { id: 9, img: "product-item-10.jpg", title: "Krop Kazak", price: "₺2.100" },
-    { id: 10, img: "product-item-1.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-    { id: 11, img: "product-item-2.jpg", title: "Baggie Tişört", price: "₺1.650" },
-    { id: 12, img: "product-item-3.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-    { id: 13, img: "product-item-4.jpg", title: "Krop Kazak", price: "₺1.500" },
-    { id: 14, img: "product-item-5.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-    { id: 15, img: "product-item-6.jpg", title: "Baggie Tişört", price: "₺1.650" },
-    { id: 16, img: "product-item-7.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-    { id: 17, img: "product-item-8.jpg", title: "El Yapımı Krop Kazak", price: "₺1.500" },
-    { id: 18, img: "product-item-10.jpg", title: "Krop Kazak", price: "₺2.100" },
-    { id: 19, img: "product-item-1.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-    { id: 20, img: "product-item-2.jpg", title: "Baggie Tişört", price: "₺1.650" },
-    { id: 21, img: "product-item-3.jpg", title: "Pamuklu Krem Tişört", price: "₺1.950" },
-    { id: 22, img: "product-item-4.jpg", title: "Krop Kazak", price: "₺1.500" },
-    { id: 23, img: "product-item-5.jpg", title: "Koyu Çiçekli Tek Parça", price: "₺2.850" },
-    { id: 24, img: "product-item-6.jpg", title: "Baggie Tişört", price: "₺1.650" },
-  ];
+  useEffect(() => {
+    let isMounted = true;
 
-  // Calculate pagination
-  const totalPages = Math.ceil(allProducts.length / productsPerPage);
-  const indexOfLastProduct = currentPage * productsPerPage;
-  const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
-  const currentProducts = allProducts.slice(indexOfFirstProduct, indexOfLastProduct);
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        const response = await getProductsGrid({
+          pageIndex: currentPage - 1,
+          pageSize: productsPerPage,
+          sort: [{ field: "id", dir: "desc" }],
+          filter: {
+            logic: "and",
+            filters: [
+              { field: "isPublished", operator: "eq", value: true }
+            ]
+          }
+        });
+
+        if (!isMounted) return;
+
+        if (response) {
+          setProducts(response.data);
+          setTotal(response.total);
+        }
+      } catch (error: any) {
+        if (!isMounted) return;
+        // Only log if it's not a 401 (unauthorized) or 404 (not found) error
+        if (error?.status !== 401 && error?.status !== 404 && error?.message?.includes('401') === false && error?.message?.includes('404') === false) {
+          console.error("Error fetching products:", error);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPage]);
+
+  const totalPages = Math.ceil(total / productsPerPage);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -141,38 +158,54 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          <div className="row">
-            {currentProducts.map((product) => (
-              <div key={product.id} className="col-6 col-md-4 col-lg-3 mb-4">
-                <div className="product-item image-zoom-effect link-effect">
-                  <div className="image-holder position-relative">
-                    <Link href={`/products/${product.id}`}>
-                      <Image
-                        src={`/images/${product.img}`}
-                        alt={product.title}
-                        className="product-image img-fluid"
-                        width={300}
-                        height={400}
-                      />
-                    </Link>
-                    <Link href="/" className="btn-icon btn-wishlist">
-                      <svg width="24" height="24" viewBox="0 0 24 24">
-                        <use xlinkHref="#heart"></use>
-                      </svg>
-                    </Link>
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border" role="status">
+                <span className="visually-hidden">Yükleniyor...</span>
+              </div>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="text-center py-5">
+              <p>Henüz ürün bulunmamaktadır.</p>
+            </div>
+          ) : (
+            <div className="row">
+              {products.map((product) => (
+                <div key={product.id} className="col-6 col-md-4 col-lg-3 mb-4">
+                  <div className="product-item image-zoom-effect link-effect">
+                    <div className="image-holder position-relative">
+                      <Link href={`/products/${product.id}`}>
+                        <Image
+                          src={product.thumbnailImageUrl || "/images/product-item-1.jpg"}
+                          alt={product.name}
+                          className="product-image img-fluid"
+                          width={300}
+                          height={400}
+                          unoptimized
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
+                          }}
+                        />
+                      </Link>
+                      <Link href="/" className="btn-icon btn-wishlist">
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                          <use xlinkHref="#heart"></use>
+                        </svg>
+                      </Link>
+                    </div>
                     <div className="product-content">
                       <h5 className="element-title text-uppercase fs-5 mt-3">
-                        <Link href={`/products/${product.id}`}>{product.title}</Link>
+                        <Link href={`/products/${product.id}`}>{product.name}</Link>
                       </h5>
                       <Link href={`/products/${product.id}`} className="text-decoration-none" data-after="Sepete Ekle">
-                        <span>{product.price}</span>
+                        <span>{product.price ? `₺${product.price.toFixed(2)}` : "Fiyat Belirtilmemiş"}</span>
                       </Link>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -214,7 +247,7 @@ export default function ProductsPage() {
               </ul>
               <div className="text-center mt-3">
                 <small className="text-muted">
-                  Sayfa {currentPage} / {totalPages} (Toplam {allProducts.length} ürün)
+                  Sayfa {currentPage} / {totalPages} (Toplam {total} ürün)
                 </small>
               </div>
             </nav>
