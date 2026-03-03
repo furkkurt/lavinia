@@ -129,7 +129,9 @@ export default function SwiperInit() {
       });
 
       // Initialize testimonial swiper with infinite scroll
-      const testimonialSwiperEl = document.querySelector(".testimonial-swiper");
+      const testimonialSwiperEl = document.querySelector(".testimonial-swiper") as
+        | (HTMLElement & { swiper?: any })
+        | null;
       if (testimonialSwiperEl && !testimonialSwiperEl.swiper) {
         const isMobile = window.innerWidth < 768;
         const swiper = new window.Swiper(".testimonial-swiper", {
@@ -169,15 +171,15 @@ export default function SwiperInit() {
             },
           },
           on: {
-            init: function() {
+            init: function (this: any) {
               // Ensure slides are visible on init
               this.update();
             },
-            slideChange: function() {
+            slideChange: function (this: any) {
               // Ensure slides remain visible during transition
               this.update();
             },
-            resize: function() {
+            resize: function (this: any) {
               // Update effect on resize
               const isMobileNow = window.innerWidth < 768;
               if (isMobileNow && this.params.effect === "coverflow") {
@@ -188,8 +190,8 @@ export default function SwiperInit() {
                 this.params.effect = "coverflow";
                 this.update();
               }
-            }
-          }
+            },
+          },
         });
       }
 

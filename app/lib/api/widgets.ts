@@ -1,6 +1,6 @@
 import { apiFetch, apiFetchMultipart } from './config';
 
-export interface CarouselWidgetItem {
+export interface AdminCarouselWidgetItem {
   id?: number;
   imageUrl?: string;
   image?: File;
@@ -10,14 +10,14 @@ export interface CarouselWidgetItem {
   linkUrl?: string;
 }
 
-export interface CarouselWidget {
+export interface AdminCarouselWidget {
   id?: number;
   name: string;
   widgetZoneId?: number;
   publishStart?: string;
   publishEnd?: string;
   displayOrder?: number;
-  items: CarouselWidgetItem[];
+  items: AdminCarouselWidgetItem[];
 }
 
 // Get all widgets
@@ -32,9 +32,9 @@ export async function getWidgets(): Promise<any[] | null> {
   return response.data || null;
 }
 
-// Get carousel widget
-export async function getCarouselWidget(id: number): Promise<CarouselWidget | null> {
-  const response = await apiFetch<CarouselWidget>(`/api/carousel-widgets/${id}`);
+// Get carousel widget (admin)
+export async function getCarouselWidget(id: number): Promise<AdminCarouselWidget | null> {
+  const response = await apiFetch<AdminCarouselWidget>(`/api/carousel-widgets/${id}`);
 
   if (response.error) {
     console.error('Error fetching carousel widget:', response.error);
@@ -44,8 +44,8 @@ export async function getCarouselWidget(id: number): Promise<CarouselWidget | nu
   return response.data || null;
 }
 
-// Create carousel widget
-export async function createCarouselWidget(widget: CarouselWidget): Promise<CarouselWidget | null> {
+// Create carousel widget (admin)
+export async function createCarouselWidget(widget: AdminCarouselWidget): Promise<AdminCarouselWidget | null> {
   const formData = new FormData();
   
   formData.append('Name', widget.name);
@@ -64,7 +64,7 @@ export async function createCarouselWidget(widget: CarouselWidget): Promise<Caro
     if (item.linkUrl) formData.append(`Items[${index}].LinkUrl`, item.linkUrl);
   });
 
-  const response = await apiFetchMultipart<CarouselWidget>('/api/carousel-widgets', formData, {
+  const response = await apiFetchMultipart<AdminCarouselWidget>('/api/carousel-widgets', formData, {
     method: 'POST',
   });
 
@@ -76,8 +76,8 @@ export async function createCarouselWidget(widget: CarouselWidget): Promise<Caro
   return response.data || null;
 }
 
-// Update carousel widget
-export async function updateCarouselWidget(id: number, widget: CarouselWidget): Promise<CarouselWidget | null> {
+// Update carousel widget (admin)
+export async function updateCarouselWidget(id: number, widget: AdminCarouselWidget): Promise<AdminCarouselWidget | null> {
   const formData = new FormData();
   
   formData.append('Id', id.toString());
@@ -98,7 +98,7 @@ export async function updateCarouselWidget(id: number, widget: CarouselWidget): 
     if (item.linkUrl) formData.append(`Items[${index}].LinkUrl`, item.linkUrl);
   });
 
-  const response = await apiFetchMultipart<CarouselWidget>(`/api/carousel-widgets/${id}`, formData, {
+  const response = await apiFetchMultipart<AdminCarouselWidget>(`/api/carousel-widgets/${id}`, formData, {
     method: 'PUT',
   });
 
