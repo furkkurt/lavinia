@@ -42,10 +42,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <Script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js" />
-        <Script src="/js/jquery.min.js" strategy="beforeInteractive" />
-        <Script src="/js/plugins.js" />
-        <Script src="/js/SmoothScroll.js" />
-        {/* script.min.js removed - conflicts with React components (SwiperInit, AOSInit) */}
+        {/* jQuery, plugins.js, and SmoothScroll.js removed - causing memory leaks and conflicts with React */}
       </body>
     </html>
   );

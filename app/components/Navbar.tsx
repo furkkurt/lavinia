@@ -14,6 +14,7 @@ import {
   GiShorts
 } from "react-icons/gi";
 import { register, login, getCurrentUser, logout as apiLogout } from "../lib/api/auth";
+import { getMenuCategories, CategoryMenuItem } from "../lib/api/categories";
 
 export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -23,6 +24,7 @@ export default function Navbar() {
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ fullName: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<CategoryMenuItem[]>([]);
 
   useEffect(() => {
     // Check if user is logged in from localStorage
@@ -33,6 +35,21 @@ export default function Navbar() {
     if (loggedIn) {
       checkAuthStatus();
     }
+
+    // Fetch categories for menu
+    const fetchCategories = async () => {
+      try {
+        const menuCategories = await getMenuCategories();
+        if (menuCategories) {
+          setCategories(menuCategories);
+        }
+      } catch (error) {
+        // Silently fail - categories are optional
+        console.error("Error fetching categories:", error);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   const checkAuthStatus = async () => {

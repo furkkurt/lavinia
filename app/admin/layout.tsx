@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import Image from "next/image";
+import { useState, useEffect } from "react";
 import { adminLogin } from "../lib/api/auth";
 
 export default function AdminLayout({
@@ -13,20 +12,21 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  
+  // Use useState to avoid hydration mismatch
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  
+  // Check auth on mount only
+  useEffect(() => {
+    setMounted(true);
+    setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
+  }, []);
+  
+  const [showLoginForm] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
-
-  useEffect(() => {
-    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
-    setIsLoggedIn(loggedIn);
-    
-    if (!loggedIn && pathname?.startsWith("/admin")) {
-      setShowLoginForm(true);
-    }
-  }, [pathname, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +42,6 @@ export default function AdminLayout({
       if (result.success) {
         localStorage.setItem("isLoggedIn", "true");
         setIsLoggedIn(true);
-        setShowLoginForm(false);
         setLoginForm({ username: "", password: "" });
       } else {
         setLoginError(result.error || "Giriş başarısız.");
@@ -58,9 +57,21 @@ export default function AdminLayout({
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("authToken");
     setIsLoggedIn(false);
-    setShowLoginForm(true);
     router.push("/admin");
   };
+
+  // Show loading state during hydration to prevent skipping
+  if (!mounted) {
+    return (
+      <div className="d-flex align-items-center justify-content-center" style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
+        <div className="text-center">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Yükleniyor...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isLoggedIn) {
     return (

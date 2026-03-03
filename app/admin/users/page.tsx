@@ -10,10 +10,7 @@ export default function AdminUsersPage() {
   const [pageSize] = useState(20);
   const [total, setTotal] = useState(0);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [pageIndex]);
-
+  // Define fetchUsers outside useEffect to avoid dependency issues
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -33,6 +30,13 @@ export default function AdminUsersPage() {
       setLoading(false);
     }
   };
+
+  // Only run once on mount and when pageIndex/pageSize change
+  // NO other dependencies to prevent infinite loops
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIndex, pageSize]); // Only pageIndex and pageSize as dependencies
 
   const handleDelete = async (id: number) => {
     if (!confirm("Bu kullanıcıyı silmek istediğinizden emin misiniz?")) {

@@ -7,6 +7,7 @@ import Footer from "../components/Footer";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getProductsGrid, Product } from "../lib/api/products";
+import { getImageUrl } from "../lib/api/config";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -25,37 +26,38 @@ export default function ProductsPage() {
   useEffect(() => {
     let isMounted = true;
 
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        const response = await getProductsGrid({
-          pageIndex: currentPage - 1,
-          pageSize: productsPerPage,
-          sort: [{ field: "id", dir: "desc" }],
-          filter: {
-            logic: "and",
-            filters: [
-              { field: "isPublished", operator: "eq", value: true }
-            ]
-          }
-        });
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const response = await getProductsGrid({
+        pageIndex: currentPage - 1,
+        pageSize: productsPerPage,
+        sort: [{ field: "id", dir: "desc" }],
+        filter: {
+          logic: "and",
+          filters: [
+              { field: "isPublished", operator: "eq", value: true },
+              { field: "isVisibleIndividually", operator: "eq", value: true }
+          ]
+        }
+      });
 
         if (!isMounted) return;
 
-        if (response) {
-          setProducts(response.data);
-          setTotal(response.total);
-        }
+      if (response) {
+        setProducts(response.data);
+        setTotal(response.total);
+      }
       } catch (error: any) {
         if (!isMounted) return;
         // Only log if it's not a 401 (unauthorized) or 404 (not found) error
         if (error?.status !== 401 && error?.status !== 404 && error?.message?.includes('401') === false && error?.message?.includes('404') === false) {
-          console.error("Error fetching products:", error);
+      console.error("Error fetching products:", error);
         }
-      } finally {
+    } finally {
         if (isMounted) {
-          setLoading(false);
-        }
+      setLoading(false);
+    }
       }
     };
 
@@ -176,7 +178,7 @@ export default function ProductsPage() {
                     <div className="image-holder position-relative">
                       <Link href={`/products/${product.id}`}>
                         <Image
-                          src={product.thumbnailImageUrl || "/images/product-item-1.jpg"}
+                          src={getImageUrl(product.thumbnailImageUrl)}
                           alt={product.name}
                           className="product-image img-fluid"
                           width={300}

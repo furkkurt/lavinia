@@ -94,7 +94,7 @@ export async function getProductsGrid(params: ProductGridParams): Promise<Produc
     // 404 means endpoint doesn't exist (backend not deployed/updated)
     // 401 means unauthorized (shouldn't happen with public endpoint)
     if (response.status !== 401 && response.status !== 404) {
-      console.error('Error fetching products:', response.error);
+    console.error('Error fetching products:', response.error);
     }
     return null;
   }
@@ -109,7 +109,7 @@ export async function getProduct(id: number): Promise<Product | null> {
   if (response.error) {
     // Only log non-401 and non-404 errors to avoid console spam
     if (response.status !== 401 && response.status !== 404) {
-      console.error('Error fetching product:', response.error);
+    console.error('Error fetching product:', response.error);
     }
     return null;
   }
@@ -174,32 +174,45 @@ export async function createProduct(product: Partial<Product>): Promise<Product 
   return response.data || null;
 }
 
-// Update product
+// Update product (same FormData shape as create for backend ProductForm)
 export async function updateProduct(id: number, product: Partial<Product>): Promise<Product | null> {
   const formData = new FormData();
-  
-  Object.keys(product).forEach((key) => {
-    const value = (product as any)[key];
-    if (value !== undefined && value !== null) {
-      if (key === 'thumbnailImage' && value instanceof File) {
-        formData.append('ThumbnailImage', value);
-      } else if (key === 'productImages' && Array.isArray(value)) {
-        value.forEach((img, index) => {
-          if (img.image instanceof File) {
-            formData.append(`ProductImages[${index}].Image`, img.image);
-          }
-        });
-      } else if (Array.isArray(value)) {
-        value.forEach((item, index) => {
-          formData.append(`${key}[${index}]`, item);
-        });
-      } else if (typeof value === 'object') {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, value.toString());
+
+  if (product.id !== undefined) formData.append('Product.Id', product.id.toString());
+  if (product.name !== undefined) formData.append('Product.Name', product.name);
+  if (product.slug !== undefined) formData.append('Product.Slug', product.slug);
+  if (product.shortDescription !== undefined) formData.append('Product.ShortDescription', product.shortDescription);
+  if (product.description !== undefined) formData.append('Product.Description', product.description);
+  if (product.specification !== undefined) formData.append('Product.Specification', product.specification);
+  if (product.sku !== undefined) formData.append('Product.Sku', product.sku);
+  if (product.gtin !== undefined) formData.append('Product.Gtin', product.gtin);
+  if (product.price !== undefined) formData.append('Product.Price', product.price.toString());
+  if (product.oldPrice !== undefined) formData.append('Product.OldPrice', product.oldPrice.toString());
+  if (product.specialPrice !== undefined) formData.append('Product.SpecialPrice', product.specialPrice.toString());
+  if (product.specialPriceStart !== undefined) formData.append('Product.SpecialPriceStart', product.specialPriceStart);
+  if (product.specialPriceEnd !== undefined) formData.append('Product.SpecialPriceEnd', product.specialPriceEnd);
+  if (product.isPublished !== undefined) formData.append('Product.IsPublished', product.isPublished.toString());
+  if (product.isFeatured !== undefined) formData.append('Product.IsFeatured', product.isFeatured.toString());
+  if (product.isCallForPricing !== undefined) formData.append('Product.IsCallForPricing', product.isCallForPricing.toString());
+  if (product.stockQuantity !== undefined) formData.append('Product.StockQuantity', product.stockQuantity.toString());
+  if (product.brandId !== undefined) formData.append('Product.BrandId', product.brandId.toString());
+  if (product.categoryIds && product.categoryIds.length > 0) {
+    product.categoryIds.forEach((catId) => formData.append('Product.CategoryIds', catId.toString()));
+  }
+  if (product.metaTitle !== undefined) formData.append('Product.MetaTitle', product.metaTitle);
+  if (product.metaKeywords !== undefined) formData.append('Product.MetaKeywords', product.metaKeywords);
+  if (product.metaDescription !== undefined) formData.append('Product.MetaDescription', product.metaDescription);
+
+  if (product.thumbnailImage instanceof File) {
+    formData.append('ThumbnailImage', product.thumbnailImage);
+  }
+  if (product.productImages && Array.isArray(product.productImages)) {
+    product.productImages.forEach((img) => {
+      if (img.image instanceof File) {
+        formData.append('ProductImages', img.image);
       }
-    }
-  });
+    });
+  }
 
   const response = await apiFetchMultipart<Product>(`/api/products/${id}`, formData, {
     method: 'PUT',

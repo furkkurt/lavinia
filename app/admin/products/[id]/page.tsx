@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { createProduct, Product } from "../../../lib/api/products";
+import { getProduct, updateProduct, Product } from "../../../lib/api/products";
 import { getBrands, Brand } from "../../../lib/api/brands";
 import { getCategories, Category } from "../../../lib/api/categories";
 
-export default function CreateProductPage() {
+export default function EditProductPage() {
   const router = useRouter();
+  const params = useParams();
+  const id = params?.id ? Number(params.id) : NaN;
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [productImages, setProductImages] = useState<File[]>([]);
@@ -38,30 +41,57 @@ export default function CreateProductPage() {
   });
 
   useEffect(() => {
+    if (!id || isNaN(id)) {
+      setFetching(false);
+      return;
+    }
     const fetchData = async () => {
-      const [brandsData, categoriesData] = await Promise.all([
+      const [product, brandsData, categoriesData] = await Promise.all([
+        getProduct(id),
         getBrands(),
         getCategories(),
       ]);
       if (brandsData) setBrands(brandsData);
       if (categoriesData) setCategories(categoriesData);
+      if (product) {
+        setFormData({
+          id: product.id,
+          name: product.name ?? "",
+          slug: product.slug ?? "",
+          shortDescription: product.shortDescription ?? "",
+          description: product.description ?? "",
+          specification: product.specification ?? "",
+          sku: product.sku ?? "",
+          gtin: product.gtin ?? "",
+          price: product.price ?? 0,
+          oldPrice: product.oldPrice ?? 0,
+          specialPrice: product.specialPrice ?? 0,
+          stockQuantity: product.stockQuantity ?? 0,
+          isPublished: product.isPublished ?? false,
+          isFeatured: product.isFeatured ?? false,
+          isCallForPricing: product.isCallForPricing ?? false,
+          brandId: product.brandId,
+          categoryIds: product.categoryIds ?? [],
+          metaTitle: product.metaTitle ?? "",
+          metaKeywords: product.metaKeywords ?? "",
+          metaDescription: product.metaDescription ?? "",
+        });
+      }
+      setFetching(false);
     };
     fetchData();
-  }, []);
+  }, [id]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-
     if (type === "checkbox") {
       setFormData((prev) => ({ ...prev, [name]: checked }));
     } else if (name === "categoryIds") {
       const select = e.target as HTMLSelectElement;
-      const selectedIds = Array.from(select.selectedOptions).map(
-        (option) => parseInt(option.value)
-      );
+      const selectedIds = Array.from(select.selectedOptions).map((opt) => parseInt(opt.value));
       setFormData((prev) => ({ ...prev, categoryIds: selectedIds }));
     } else if (name === "price" || name === "oldPrice" || name === "specialPrice" || name === "stockQuantity") {
       setFormData((prev) => ({ ...prev, [name]: parseFloat(value) || 0 }));
@@ -71,48 +101,63 @@ export default function CreateProductPage() {
   };
 
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setThumbnailImage(e.target.files[0]);
-    }
+    if (e.target.files?.[0]) setThumbnailImage(e.target.files[0]);
   };
 
   const handleProductImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setProductImages(Array.from(e.target.files));
-    }
+    if (e.target.files) setProductImages(Array.from(e.target.files));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!id || isNaN(id)) return;
     setLoading(true);
-
     try {
-      const productData: Partial<Product> = {
+      const payload: Partial<Product> = {
         ...formData,
-        thumbnailImage: thumbnailImage || undefined,
+        thumbnailImage: thumbnailImage ?? undefined,
         productImages: productImages.map((img) => ({ image: img })),
       };
-
-      const result = await createProduct(productData);
-
+      const result = await updateProduct(id, payload);
       if (result) {
-        alert("Ürün başarıyla oluşturuldu!");
+        alert("Ürün güncellendi.");
         router.push("/admin/products");
       } else {
-        alert("Ürün oluşturulurken bir hata oluştu.");
+        alert("Güncelleme sırasında bir hata oluştu.");
       }
-    } catch (error) {
-      console.error("Error creating product:", error);
-      alert("Ürün oluşturulurken bir hata oluştu.");
+    } catch (err) {
+      console.error("Error updating product:", err);
+      alert("Güncelleme sırasında bir hata oluştu.");
     } finally {
       setLoading(false);
     }
   };
 
+  if (fetching) {
+    return (
+      <div className="d-flex justify-content-center align-items-center py-5">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Yükleniyor...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!formData.name && !fetching) {
+    return (
+      <div>
+        <p>Ürün bulunamadı.</p>
+        <Link href="/admin/products" className="btn btn-secondary">
+          Listeye Dön
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Yeni Ürün Ekle</h1>
+        <h1>Ürünü Düzenle</h1>
         <Link href="/admin/products" className="btn btn-secondary">
           Geri Dön
         </Link>
@@ -263,9 +308,7 @@ export default function CreateProductPage() {
                     checked={formData.isCallForPricing}
                     onChange={handleInputChange}
                   />
-                  <label className="form-check-label">
-                    Fiyat için Arayın
-                  </label>
+                  <label className="form-check-label">Fiyat için Arayın</label>
                 </div>
               </div>
             </div>
@@ -283,13 +326,13 @@ export default function CreateProductPage() {
                 <select
                   className="form-select"
                   name="brandId"
-                  value={formData.brandId || ""}
+                  value={formData.brandId ?? ""}
                   onChange={handleInputChange}
                 >
                   <option value="">Marka Seçin</option>
-                  {brands.map((brand) => (
-                    <option key={brand.id} value={brand.id}>
-                      {brand.name}
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
                     </option>
                   ))}
                 </select>
@@ -300,18 +343,18 @@ export default function CreateProductPage() {
                   className="form-select"
                   name="categoryIds"
                   multiple
-                  value={formData.categoryIds?.map(String) || []}
+                  value={formData.categoryIds?.map(String) ?? []}
                   onChange={handleInputChange}
                   size={5}
                 >
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
                 <small className="form-text text-muted">
-                  Birden fazla kategori seçmek için Ctrl (Windows) veya Cmd (Mac) tuşuna basılı tutun.
+                  Birden fazla kategori için Ctrl/Cmd ile seçin.
                 </small>
               </div>
             </div>
@@ -325,7 +368,7 @@ export default function CreateProductPage() {
           <div className="card-body">
             <div className="row">
               <div className="col-md-6 mb-3">
-                <label className="form-label">Thumbnail Görsel</label>
+                <label className="form-label">Thumbnail (yeni yükleme)</label>
                 <input
                   type="file"
                   className="form-control"
@@ -333,13 +376,11 @@ export default function CreateProductPage() {
                   onChange={handleThumbnailChange}
                 />
                 {thumbnailImage && (
-                  <small className="text-muted d-block mt-2">
-                    Seçilen: {thumbnailImage.name}
-                  </small>
+                  <small className="text-muted d-block mt-2">Seçilen: {thumbnailImage.name}</small>
                 )}
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Ürün Görselleri</label>
+                <label className="form-label">Ek ürün görselleri</label>
                 <input
                   type="file"
                   className="form-control"
@@ -348,9 +389,7 @@ export default function CreateProductPage() {
                   onChange={handleProductImagesChange}
                 />
                 {productImages.length > 0 && (
-                  <small className="text-muted d-block mt-2">
-                    {productImages.length} görsel seçildi
-                  </small>
+                  <small className="text-muted d-block mt-2">{productImages.length} görsel seçildi</small>
                 )}
               </div>
             </div>
@@ -359,7 +398,7 @@ export default function CreateProductPage() {
 
         <div className="card mb-4">
           <div className="card-header">
-            <h5 className="mb-0">SEO Ayarları</h5>
+            <h5 className="mb-0">SEO</h5>
           </div>
           <div className="card-body">
             <div className="row">
@@ -399,7 +438,7 @@ export default function CreateProductPage() {
 
         <div className="card mb-4">
           <div className="card-header">
-            <h5 className="mb-0">Yayın Ayarları</h5>
+            <h5 className="mb-0">Yayın</h5>
           </div>
           <div className="card-body">
             <div className="row">
@@ -412,9 +451,7 @@ export default function CreateProductPage() {
                     checked={formData.isPublished}
                     onChange={handleInputChange}
                   />
-                  <label className="form-check-label">
-                    Yayınla
-                  </label>
+                  <label className="form-check-label">Yayınla</label>
                 </div>
               </div>
               <div className="col-md-6 mb-3">
@@ -426,9 +463,7 @@ export default function CreateProductPage() {
                     checked={formData.isFeatured}
                     onChange={handleInputChange}
                   />
-                  <label className="form-check-label">
-                    Öne Çıkar
-                  </label>
+                  <label className="form-check-label">Öne Çıkar</label>
                 </div>
               </div>
             </div>
@@ -436,12 +471,8 @@ export default function CreateProductPage() {
         </div>
 
         <div className="d-flex gap-2">
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-          >
-            {loading ? "Kaydediliyor..." : "Ürünü Kaydet"}
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? "Kaydediliyor..." : "Güncelle"}
           </button>
           <Link href="/admin/products" className="btn btn-secondary">
             İptal

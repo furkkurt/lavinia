@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { getImageUrl } from "../lib/api/config";
 
 interface Product {
   id: number;
@@ -48,7 +49,7 @@ export default function ProductCarousel({
                     <div className="image-holder position-relative">
                       <Link href={`/products/${product.id}`}>
                         <Image
-                          src={product.img.startsWith('http') ? product.img : `/images/${product.img}`}
+                          src={getImageUrl(product.img)}
                           alt={product.title}
                           className="product-image img-fluid"
                           width={300}

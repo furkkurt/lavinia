@@ -1,59 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getProductsGrid } from "../lib/api/products";
-import { getUsersGrid } from "../lib/api/users";
 import Link from "next/link";
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    totalUsers: 0,
-    publishedProducts: 0,
-    activeUsers: 0,
-  });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [productsRes, usersRes] = await Promise.all([
-          getProductsGrid({ pageIndex: 0, pageSize: 1 }),
-          getUsersGrid({ pageIndex: 0, pageSize: 1 }),
-        ]);
-
-        if (productsRes) {
-          setStats((prev) => ({
-            ...prev,
-            totalProducts: productsRes.total,
-          }));
-        }
-
-        if (usersRes) {
-          setStats((prev) => ({
-            ...prev,
-            totalUsers: usersRes.total,
-          }));
-        }
-      } catch (error) {
-        console.error("Error fetching stats:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="text-center py-5">
-        <div className="spinner-border" role="status">
-          <span className="visually-hidden">Yükleniyor...</span>
-        </div>
-      </div>
-    );
-  }
+  // No API calls in dashboard - prevents memory leaks from layout re-renders
+  // Stats will be fetched in individual pages (products, users) when needed
 
   return (
     <div>
@@ -63,8 +14,8 @@ export default function AdminDashboard() {
         <div className="col-md-6 col-lg-3">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Toplam Ürün</h5>
-              <h2 className="text-primary">{stats.totalProducts}</h2>
+              <h5 className="card-title">Ürün Yönetimi</h5>
+              <p className="text-muted">Ürünleri görüntüle ve yönet</p>
               <Link href="/admin/products" className="btn btn-sm btn-outline-primary">
                 Ürünleri Görüntüle
               </Link>
@@ -75,8 +26,8 @@ export default function AdminDashboard() {
         <div className="col-md-6 col-lg-3">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Toplam Kullanıcı</h5>
-              <h2 className="text-success">{stats.totalUsers}</h2>
+              <h5 className="card-title">Kullanıcı Yönetimi</h5>
+              <p className="text-muted">Kullanıcıları görüntüle ve yönet</p>
               <Link href="/admin/users" className="btn btn-sm btn-outline-success">
                 Kullanıcıları Görüntüle
               </Link>
@@ -87,8 +38,8 @@ export default function AdminDashboard() {
         <div className="col-md-6 col-lg-3">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Yayınlanan Ürünler</h5>
-              <h2 className="text-info">{stats.publishedProducts}</h2>
+              <h5 className="card-title">Siparişler</h5>
+              <p className="text-muted">Yakında eklenecek</p>
             </div>
           </div>
         </div>
@@ -96,8 +47,8 @@ export default function AdminDashboard() {
         <div className="col-md-6 col-lg-3">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Aktif Kullanıcılar</h5>
-              <h2 className="text-warning">{stats.activeUsers}</h2>
+              <h5 className="card-title">Raporlar</h5>
+              <p className="text-muted">Yakında eklenecek</p>
             </div>
           </div>
         </div>

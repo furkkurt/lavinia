@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiFetch } from './config';
+import { API_BASE_URL, apiFetch, setAuthToken, removeAuthToken } from './config';
 
 export interface LoginCredentials {
   email: string;
@@ -17,11 +17,11 @@ export interface RegisterData {
   phoneNumber?: string;
 }
 
-// Register new user via /api/users endpoint (no Authorization header for public registration)
+// Register new user via /api/account/register endpoint (public, no auth required)
 export async function register(data: RegisterData): Promise<{ success: boolean; error?: string }> {
   try {
-    // Use /api/users POST endpoint without Authorization header (public registration)
-    const response = await fetch(`${API_BASE_URL}/api/users`, {
+    // Use /api/account/register endpoint - this is the public registration endpoint with [AllowAnonymous]
+    const response = await fetch(`${API_BASE_URL}/api/account/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -33,8 +33,6 @@ export async function register(data: RegisterData): Promise<{ success: boolean; 
         email: data.email,
         phoneNumber: data.phoneNumber || '',
         password: data.password,
-        roleIds: [], // Default role for new users
-        customerGroupIds: [],
       }),
     });
 
@@ -106,38 +104,53 @@ export async function login(credentials: LoginCredentials): Promise<{ success: b
   }
 }
 
-// Admin Login - Development bypass for admin access
-// Since there's no public login endpoint and UserApi requires authentication,
-// we use a simple development bypass for admin/admin credentials
-// TODO: Replace with proper authentication when backend login endpoint is available
+// Admin Login - Calls backend POST /api/account/login for cookie-based auth.
+// On success, backend sets auth cookie; subsequent admin API calls (products, users) send it.
 export async function adminLogin(credentials: AdminLoginCredentials): Promise<{ success: boolean; error?: string }> {
   try {
-    // Development bypass: Accept "admin" username with "admin" password
-    // This matches the previous working behavior
-    if (credentials.username.toLowerCase() === 'admin' && credentials.password === 'admin') {
-      // Store admin session in localStorage
-      localStorage.setItem('adminUser', JSON.stringify({
-        id: 1,
-        username: 'admin',
-        fullName: 'Admin',
-        email: 'admin@example.com',
-      }));
-      
-      return { success: true };
+    const response = await fetch(`${API_BASE_URL}/api/account/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        emailOrUserName: credentials.username.trim(),
+        password: credentials.password,
+        rememberMe: true,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    const errorMessage = data?.error || (response.ok ? null : `HTTP ${response.status}: ${response.statusText}`);
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: errorMessage || 'Kullanıcı adı veya şifre hatalı.',
+      };
     }
 
-    // For other credentials, you could try to verify via API if needed
-    // But since UserApi requires auth, we can't verify without being logged in first
-    
-    return { 
-      success: false, 
-      error: 'Kullanıcı adı veya şifre hatalı. (Development: admin/admin)' 
-    };
+    // Backend returns { userName, fullName, email, accessToken }; store token for cross-origin API calls (Bearer)
+    const token = (data as any).accessToken;
+    if (token) {
+      setAuthToken(token);
+    }
+    localStorage.setItem(
+      'adminUser',
+      JSON.stringify({
+        id: (data as any).id ?? 1,
+        username: (data as any).userName ?? credentials.username,
+        fullName: (data as any).fullName ?? 'Admin',
+        email: (data as any).email ?? '',
+      })
+    );
+    localStorage.setItem('isLoggedIn', 'true');
+
+    return { success: true };
   } catch (error: any) {
     console.error('Admin login error:', error);
-    return { 
-      success: false, 
-      error: error.message || 'Giriş yapılırken bir hata oluştu.' 
+    return {
+      success: false,
+      error: error?.message || 'Giriş yapılırken bir hata oluştu.',
     };
   }
 }
@@ -149,13 +162,22 @@ export async function getCurrentUser(): Promise<any | null> {
   return null;
 }
 
-// Logout
-// Note: This endpoint doesn't exist in the API, so we just clear localStorage
+// Logout - clear backend session (cookie) when admin was logged in, then clear localStorage
 export async function logout(): Promise<boolean> {
-  // Clear local storage
   if (typeof window !== 'undefined') {
+    const hadAdmin = !!localStorage.getItem('adminUser');
+    if (hadAdmin) {
+      try {
+        await fetch(`${API_BASE_URL}/api/account/logout`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+      } catch {
+        // Ignore; we still clear local state
+      }
+    }
     localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('authToken');
+    removeAuthToken();
     localStorage.removeItem('user');
     localStorage.removeItem('adminUser');
   }

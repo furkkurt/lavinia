@@ -53,15 +53,10 @@ export default function AOSInit() {
       isMounted = false;
       if (timeoutId) {
         clearTimeout(timeoutId);
+        timeoutId = null;
       }
-      // AOS doesn't need explicit cleanup, but we can refresh it on unmount
-      if (typeof window !== "undefined" && window.AOS) {
-        try {
-          window.AOS.refresh();
-        } catch (e) {
-          // Ignore errors during cleanup
-        }
-      }
+      // Don't refresh AOS on unmount - it can cause memory leaks
+      // AOS will automatically handle cleanup
     };
   }, [pathname]);
 

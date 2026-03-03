@@ -135,3 +135,69 @@ export async function getWidgetZones(): Promise<any[] | null> {
 
   return response.data || null;
 }
+
+// Widget zone IDs (matching backend WidgetZoneIds)
+export const WidgetZoneIds = {
+  HomeFeatured: 1,
+  HomeMainContent: 2,
+  HomeAfterMainContent: 3,
+};
+
+export interface ProductWidget {
+  id: number;
+  name: string;
+  widgetType: 'ProductWidget';
+  widgetZoneId: number;
+  displayOrder: number;
+  setting: {
+    numberOfProducts: number;
+    categoryId?: number;
+    orderBy: string;
+    featuredOnly: boolean;
+  };
+  products: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    price: number;
+    oldPrice?: number;
+    specialPrice?: number;
+    thumbnailUrl?: string;
+    calculatedProductPrice?: {
+      price: number;
+      oldPrice?: number;
+      percentOfSaving?: number;
+    };
+  }>;
+}
+
+export interface CarouselWidget {
+  id: number;
+  name: string;
+  widgetType: 'CarouselWidget';
+  widgetZoneId: number;
+  displayOrder: number;
+  items: Array<{
+    image: string;
+    imageUrl?: string;
+    caption?: string;
+    subCaption?: string;
+    linkText?: string;
+    targetUrl?: string;
+  }>;
+}
+
+// Get published widgets by zone (public endpoint)
+export async function getWidgetsByZone(widgetZoneId: number): Promise<(ProductWidget | CarouselWidget | any)[] | null> {
+  const response = await apiFetch<any[]>(`/api/public/widgets/zone/${widgetZoneId}`);
+
+  if (response.error) {
+    // Only log non-401 and non-404 errors
+    if (response.status !== 401 && response.status !== 404) {
+      console.error('Error fetching widgets:', response.error);
+    }
+    return null;
+  }
+
+  return response.data || null;
+}

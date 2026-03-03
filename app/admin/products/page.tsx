@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getProductsGrid, deleteProduct, changeProductStatus, Product } from "../../lib/api/products";
 import Link from "next/link";
 import Image from "next/image";
+import { getImageUrl } from "../../lib/api/config";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -13,10 +14,7 @@ export default function AdminProductsPage() {
   const [total, setTotal] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  useEffect(() => {
-    fetchProducts();
-  }, [pageIndex]);
-
+  // Define fetchProducts outside useEffect to avoid dependency issues
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -37,6 +35,13 @@ export default function AdminProductsPage() {
     }
   };
 
+  // Only run once on mount and when pageIndex/pageSize change
+  // NO other dependencies to prevent infinite loops
+  useEffect(() => {
+    fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIndex, pageSize]); // Only pageIndex and pageSize as dependencies
+
   const handleDelete = async (id: number) => {
     if (!confirm("Bu ürünü silmek istediğinizden emin misiniz?")) {
       return;
@@ -44,6 +49,7 @@ export default function AdminProductsPage() {
 
     const success = await deleteProduct(id);
     if (success) {
+      // Refetch products after delete
       fetchProducts();
     } else {
       alert("Ürün silinirken bir hata oluştu.");
@@ -53,6 +59,7 @@ export default function AdminProductsPage() {
   const handleToggleStatus = async (id: number) => {
     const success = await changeProductStatus(id);
     if (success) {
+      // Refetch products after status change
       fetchProducts();
     } else {
       alert("Ürün durumu değiştirilirken bir hata oluştu.");
@@ -102,12 +109,13 @@ export default function AdminProductsPage() {
                     <td>
                       {product.thumbnailImageUrl ? (
                         <Image
-                          src={product.thumbnailImageUrl}
+                          src={getImageUrl(product.thumbnailImageUrl)}
                           alt={product.name}
                           width={50}
                           height={50}
                           style={{ objectFit: "cover" }}
                           className="rounded"
+                          unoptimized
                         />
                       ) : (
                         <div

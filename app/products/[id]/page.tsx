@@ -9,6 +9,7 @@ import ProductCarousel from "../../components/ProductCarousel";
 import Link from "next/link";
 import { useEffect, use, useState } from "react";
 import { getProduct, getProductsGrid, Product } from "../../lib/api/products";
+import { getImageUrl } from "../../lib/api/config";
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -58,11 +59,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         if (!isMounted) return;
         // Only log if it's not a 401 (unauthorized) or 404 (not found) error
         if (error?.status !== 401 && error?.status !== 404 && error?.message?.includes('401') === false && error?.message?.includes('404') === false) {
-          console.error("Error fetching product:", error);
+        console.error("Error fetching product:", error);
         }
       } finally {
         if (isMounted) {
-          setLoading(false);
+        setLoading(false);
         }
       }
     };
@@ -178,7 +179,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                         product.productImages.map((img, idx) => (
                           <div key={idx} className="swiper-slide">
                             <Image
-                              src={img.imageUrl || product.thumbnailImageUrl || "/images/product-item-1.jpg"}
+                              src={getImageUrl(img.imageUrl || product.thumbnailImageUrl)}
                               alt={`${product.name} - Görsel ${idx + 1}`}
                               className="img-fluid"
                               width={600}
@@ -193,7 +194,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                       ) : (
                         <div className="swiper-slide">
                           <Image
-                            src={product.thumbnailImageUrl || "/images/product-item-1.jpg"}
+                            src={getImageUrl(product.thumbnailImageUrl)}
                             alt={product.name}
                             className="img-fluid"
                             width={600}
@@ -215,7 +216,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                           <div key={idx} className="swiper-slide" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <div style={{ width: "100%", height: "120px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
                               <Image
-                                src={img.imageUrl || product.thumbnailImageUrl || "/images/product-item-1.jpg"}
+                                src={getImageUrl(img.imageUrl || product.thumbnailImageUrl)}
                                 alt={`${product.name} - Thumbnail ${idx + 1}`}
                                 className="img-fluid"
                                 width={150}
@@ -307,7 +308,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           title="Beğenebileceğiniz Ürünler"
           products={relatedProducts.map((p) => ({
             id: p.id,
-            img: p.thumbnailImageUrl || "/images/product-item-1.jpg",
+            img: getImageUrl(p.thumbnailImageUrl),
             title: p.name,
             price: p.price ? `₺${p.price.toFixed(2)}` : "Fiyat Belirtilmemiş",
           }))}

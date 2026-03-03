@@ -12,13 +12,15 @@ declare global {
 export default function SwiperInit() {
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
+    let initTimeoutId: NodeJS.Timeout | null = null;
     let isMounted = true;
+    let isInitialized = false; // Prevent multiple initializations
 
     // Wait for Swiper to be available
     const waitForSwiper = (callback: () => void, maxAttempts = 50) => {
       let attempts = 0;
       const checkSwiper = () => {
-        if (!isMounted) return; // Component unmounted, stop checking
+        if (!isMounted || isInitialized) return; // Component unmounted or already initialized, stop checking
         if (typeof window !== "undefined" && window.Swiper) {
           callback();
         } else if (attempts < maxAttempts) {
@@ -30,7 +32,8 @@ export default function SwiperInit() {
     };
 
     const initSwipers = () => {
-      if (typeof window === "undefined" || !window.Swiper) return;
+      if (typeof window === "undefined" || !window.Swiper || isInitialized) return;
+      isInitialized = true; // Mark as initialized to prevent re-initialization
 
       // Initialize all main swipers (new collections and related products)
       const mainSwiperEls = document.querySelectorAll(".main-swiper");
@@ -233,16 +236,26 @@ export default function SwiperInit() {
 
     // Wait for Swiper to load, then initialize
     waitForSwiper(() => {
-      if (!isMounted) return; // Component unmounted, don't initialize
+      if (!isMounted || isInitialized) return; // Component unmounted or already initialized, don't initialize
       // Small delay to ensure DOM is fully rendered
-      timeoutId = setTimeout(initSwipers, 200);
+      initTimeoutId = setTimeout(() => {
+        if (isMounted && !isInitialized) {
+          initSwipers();
+        }
+      }, 200);
     });
 
     // Cleanup function
     return () => {
       isMounted = false;
+      isInitialized = false;
       if (timeoutId) {
         clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (initTimeoutId) {
+        clearTimeout(initTimeoutId);
+        initTimeoutId = null;
       }
       // Destroy all Swiper instances on unmount
       if (typeof window !== "undefined" && window.Swiper) {
