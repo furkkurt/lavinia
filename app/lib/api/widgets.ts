@@ -188,16 +188,19 @@ export interface CarouselWidget {
 }
 
 // Get published widgets by zone (public endpoint)
+// Backend returns a JSON array; support both raw array and { data: array }.
 export async function getWidgetsByZone(widgetZoneId: number): Promise<(ProductWidget | CarouselWidget | any)[] | null> {
-  const response = await apiFetch<any[]>(`/api/public/widgets/zone/${widgetZoneId}`);
+  const response = await apiFetch<any>(`/api/public/widgets/zone/${widgetZoneId}`);
 
   if (response.error) {
-    // Only log non-401 and non-404 errors
     if (response.status !== 401 && response.status !== 404) {
       console.error('Error fetching widgets:', response.error);
     }
     return null;
   }
 
-  return response.data || null;
+  const raw = response.data;
+  if (Array.isArray(raw)) return raw;
+  if (raw && Array.isArray(raw.data)) return raw.data;
+  return null;
 }
