@@ -13,7 +13,7 @@ import {
   GiDress,
   GiShorts
 } from "react-icons/gi";
-import { register, login, getCurrentUser, logout as apiLogout } from "../lib/api/auth";
+import { register, login, adminLogin, getCurrentUser, logout as apiLogout } from "../lib/api/auth";
 import { getMenuCategories, CategoryMenuItem } from "../lib/api/categories";
 
 export default function Navbar() {
@@ -53,14 +53,20 @@ export default function Navbar() {
   }, []);
 
   const checkAuthStatus = async () => {
-    // Since getCurrentUser endpoint doesn't exist, just check localStorage
+    // Check localStorage for user (customer) or adminUser (admin)
     const loggedIn = localStorage.getItem("isLoggedIn") === "true";
     const userStr = localStorage.getItem("user");
-    
-    if (loggedIn && userStr) {
+    const adminStr = localStorage.getItem("adminUser");
+
+    if (loggedIn) {
       try {
-        const user = JSON.parse(userStr);
-        setCurrentUser(user);
+        if (adminStr) {
+          const admin = JSON.parse(adminStr);
+          setCurrentUser({ ...admin, fullName: admin.fullName });
+        } else if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUser(user);
+        }
         setIsLoggedIn(true);
       } catch {
         setIsLoggedIn(loggedIn);
@@ -75,19 +81,33 @@ export default function Navbar() {
     setLoading(true);
 
     try {
-      const result = await login({
-        email: loginForm.email,
+      // Try admin login first (stores Bearer token for /api/users, etc.)
+      const adminResult = await adminLogin({
+        username: loginForm.email,
         password: loginForm.password,
       });
 
-      if (result.success) {
-        localStorage.setItem("isLoggedIn", "true");
+      if (adminResult.success) {
         setIsLoggedIn(true);
         setShowLoginModal(false);
         setLoginForm({ email: "", password: "" });
         await checkAuthStatus();
       } else {
-        alert(result.error || "E-posta veya şifre hatalı!");
+        // Fall back to customer login (quickSearchUsers)
+        const result = await login({
+          email: loginForm.email,
+          password: loginForm.password,
+        });
+
+        if (result.success) {
+          localStorage.setItem("isLoggedIn", "true");
+          setIsLoggedIn(true);
+          setShowLoginModal(false);
+          setLoginForm({ email: "", password: "" });
+          await checkAuthStatus();
+        } else {
+          alert(adminResult.error || result.error || "E-posta veya şifre hatalı!");
+        }
       }
     } catch (error: any) {
       console.error("Login error:", error);
@@ -170,7 +190,7 @@ export default function Navbar() {
                   alt="Boutique Lavinia"
                   width={150}
                   height={50}
-                  style={{ objectFit: "contain", maxWidth: "100%" }}
+                  style={{ objectFit: "contain", maxWidth: "100%", height: "auto" }}
                   className="img-fluid"
                 />
               </Link>

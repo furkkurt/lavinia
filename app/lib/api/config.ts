@@ -21,16 +21,6 @@ export function getImageUrl(imagePath: string | undefined | null): string {
   return `${API_BASE_URL}/${imagePath}`;
 }
 
-// Import debug utility
-let debugMemory: any = null;
-if (typeof window !== 'undefined') {
-  try {
-    debugMemory = require('./debug').debugMemory;
-  } catch (e) {
-    // Debug module not available
-  }
-}
-
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -112,11 +102,6 @@ export async function apiFetch<T>(
 
   // Create the fetch promise
   const fetchPromise = (async () => {
-    // Debug logging
-    if (debugMemory) {
-      debugMemory.logApiCall(endpoint);
-  }
-
   try {
     const response = await fetch(url, {
       ...options,

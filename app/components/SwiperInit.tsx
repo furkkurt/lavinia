@@ -75,23 +75,23 @@ export default function SwiperInit() {
           const prevArrow = carousel.querySelector(".icon-arrow-left");
           const paginationEl = swiperEl.querySelector(".swiper-pagination");
           
-          // Check if it's best-sellers carousel - show exactly 3 cards
-          const isBestSellers = id === "best-sellers";
+          // 3 kart gösteren carousel'ler (en-son-eklenen, best-sellers)
+          const isThreeSlides = id === "en-son-eklenen" || id === "best-sellers";
           
           // Get number of slides to ensure loop works
           const slides = swiperEl.querySelectorAll('.swiper-slide');
           const slideCount = slides.length;
           
           // Loop requires at least slidesPerView * 2 slides to work properly
-          const canLoop = slideCount >= (isBestSellers ? 6 : 8);
+          const canLoop = slideCount >= (isThreeSlides ? 6 : 8);
           
           // Initialize Swiper with custom navigation arrows and loop
           new window.Swiper(swiperEl as HTMLElement, {
-            slidesPerView: isBestSellers ? 3 : 4,
-            spaceBetween: isBestSellers ? 20 : 20,
+            slidesPerView: isThreeSlides ? 3 : 4,
+            spaceBetween: isThreeSlides ? 20 : 20,
             loop: canLoop,
-            loopAdditionalSlides: isBestSellers ? 3 : 4,
-            loopedSlides: isBestSellers ? 3 : 4,
+            loopAdditionalSlides: isThreeSlides ? 3 : 4,
+            loopedSlides: isThreeSlides ? 3 : 4,
             watchSlidesProgress: true,
             navigation: nextArrow && prevArrow ? {
               nextEl: nextArrow as HTMLElement,
@@ -110,18 +110,18 @@ export default function SwiperInit() {
                 loopedSlides: 2,
               },
               999: {
-                slidesPerView: isBestSellers ? 3 : 3,
-                spaceBetween: isBestSellers ? 20 : 10,
-                loop: isBestSellers ? slideCount >= 6 : slideCount >= 6,
-                loopAdditionalSlides: isBestSellers ? 3 : 3,
-                loopedSlides: isBestSellers ? 3 : 3,
+                slidesPerView: isThreeSlides ? 3 : 3,
+                spaceBetween: isThreeSlides ? 20 : 10,
+                loop: isThreeSlides ? slideCount >= 6 : slideCount >= 6,
+                loopAdditionalSlides: isThreeSlides ? 3 : 3,
+                loopedSlides: isThreeSlides ? 3 : 3,
               },
               1366: {
-                slidesPerView: isBestSellers ? 3 : 4,
-                spaceBetween: isBestSellers ? 20 : 40,
-                loop: isBestSellers ? slideCount >= 6 : slideCount >= 8,
-                loopAdditionalSlides: isBestSellers ? 3 : 4,
-                loopedSlides: isBestSellers ? 3 : 4,
+                slidesPerView: isThreeSlides ? 3 : 4,
+                spaceBetween: isThreeSlides ? 20 : 40,
+                loop: isThreeSlides ? slideCount >= 6 : slideCount >= 8,
+                loopAdditionalSlides: isThreeSlides ? 3 : 4,
+                loopedSlides: isThreeSlides ? 3 : 4,
               },
             },
           });

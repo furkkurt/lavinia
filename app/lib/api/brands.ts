@@ -7,6 +7,14 @@ export interface Brand {
   description?: string;
 }
 
+export interface RecentBrandWithImage {
+  id: number;
+  name: string;
+  slug: string;
+  thumbnailImageUrl: string | null;
+  firstProductId: number;
+}
+
 // Get all published brands (public endpoint)
 export async function getBrands(): Promise<Brand[] | null> {
   const response = await apiFetch<Brand[]>('/api/public/brands');
@@ -34,5 +42,15 @@ export async function getBrandBySlug(slug: string): Promise<Brand | null> {
     return null;
   }
 
+  return response.data || null;
+}
+
+/** En son kullanılan 3 marka, her birinde ilk ürünün görseli */
+export async function getRecentBrandsWithProductImage(): Promise<RecentBrandWithImage[] | null> {
+  const response = await apiFetch<RecentBrandWithImage[]>('/api/public/brands/recent-with-product-image');
+  if (response.error && response.status !== 401 && response.status !== 404) {
+    console.error('Error fetching recent brands:', response.error);
+    return null;
+  }
   return response.data || null;
 }

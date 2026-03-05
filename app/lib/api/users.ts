@@ -44,16 +44,35 @@ export interface UserGridResponse {
   total: number;
 }
 
-// Get users with pagination
+// Get users with pagination (backend expects SmartTable format)
 export async function getUsersGrid(params: UserGridParams): Promise<UserGridResponse | null> {
-  const response = await apiFetch<UserGridResponse>('/api/users/grid', {
+  const pageIndex = params.pageIndex || 0;
+  const pageSize = params.pageSize || 20;
+
+  // Convert to backend SmartTable format: pagination, sort, search
+  // Backend expects PascalCase property names (e.g. Id, Email, FullName)
+  const sortField = params.sort?.[0]?.field;
+  const predicate = sortField
+    ? sortField.charAt(0).toUpperCase() + sortField.slice(1)
+    : 'Id';
+  const sortObj = params.sort && params.sort.length > 0
+    ? { predicate, reverse: params.sort[0].dir === 'desc' }
+    : { predicate: 'Id', reverse: true };
+
+  const requestBody = {
+    pagination: { start: pageIndex * pageSize, number: pageSize },
+    sort: sortObj,
+    search: { predicateObject: {} as Record<string, unknown> },
+  };
+
+  // Add filters if provided
+  if (params.filter && params.filter.filters && params.filter.filters.length > 0) {
+    requestBody.search.predicateObject.filter = params.filter;
+  }
+
+  const response = await apiFetch<{ items: User[]; totalRecord: number }>('/api/users/grid', {
     method: 'POST',
-    body: JSON.stringify({
-      pageIndex: params.pageIndex || 0,
-      pageSize: params.pageSize || 20,
-      sort: params.sort || [],
-      filter: params.filter || { logic: 'and', filters: [] },
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (response.error) {
@@ -61,7 +80,14 @@ export async function getUsersGrid(params: UserGridParams): Promise<UserGridResp
     return null;
   }
 
-  return response.data || null;
+  const data = response.data;
+  if (!data) return null;
+
+  // Map SmartTable response (items, totalRecord) to frontend format (data, total)
+  return {
+    data: data.items || [],
+    total: data.totalRecord ?? 0,
+  };
 }
 
 // Get single user

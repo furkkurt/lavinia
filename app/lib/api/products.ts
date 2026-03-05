@@ -89,12 +89,15 @@ export async function getProductsGrid(params: ProductGridParams): Promise<Produc
     body: JSON.stringify(requestBody),
   });
 
+  // DEBUG: ana sayfa ürün sorunu
+  if (typeof window !== 'undefined') {
+    const r = response.data as ProductGridResponse | undefined;
+    console.log('[getProductsGrid] status:', response.status, 'error:', response.error, 'data length:', r?.data?.length ?? 'n/a', 'total:', r?.total ?? 'n/a');
+  }
+
   if (response.error) {
-    // Only log non-401 and non-404 errors to avoid console spam
-    // 404 means endpoint doesn't exist (backend not deployed/updated)
-    // 401 means unauthorized (shouldn't happen with public endpoint)
     if (response.status !== 401 && response.status !== 404) {
-    console.error('Error fetching products:', response.error);
+      console.error('Error fetching products:', response.error);
     }
     return null;
   }
