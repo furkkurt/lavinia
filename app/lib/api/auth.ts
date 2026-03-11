@@ -40,7 +40,10 @@ export async function register(data: RegisterData): Promise<{ success: boolean; 
       return { success: true };
     }
 
-    // Try to extract meaningful error message from backend
+    if (response.status === 409) {
+      return { success: false, error: 'Bu e-posta adresi zaten kullanımda. Lütfen farklı bir e-posta adresi deneyin veya giriş yapın.' };
+    }
+
     let errorMessage = 'Kayıt sırasında bir hata oluştu.';
     try {
       const errorBody = await response.json();
@@ -54,7 +57,6 @@ export async function register(data: RegisterData): Promise<{ success: boolean; 
           : null) ||
         `HTTP ${response.status}: ${response.statusText}`;
     } catch {
-      // Fallback to status text if JSON parse fails
       errorMessage = `HTTP ${response.status}: ${response.statusText}`;
     }
 
@@ -68,33 +70,41 @@ export async function register(data: RegisterData): Promise<{ success: boolean; 
   }
 }
 
-// Login - For regular users, verify via UserApi (development workaround)
+// Login - Calls backend POST /api/account/login for real authentication with JWT token.
 export async function login(credentials: LoginCredentials): Promise<{ success: boolean; error?: string }> {
   try {
-    // Import quickSearchUsers dynamically to avoid circular dependency
-    const { quickSearchUsers } = await import('./users');
-    
-    // Try to find user by email
-    const users = await quickSearchUsers(undefined, credentials.email);
+    const response = await fetch(`${API_BASE_URL}/api/account/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        emailOrUserName: credentials.email.trim(),
+        password: credentials.password,
+        rememberMe: true,
+      }),
+    });
 
-    // If user found, allow login (development bypass - password verification would need backend support)
-    if (users && users.length > 0) {
-      // Store user info in localStorage for session management
-      const user = users[0];
-      localStorage.setItem('user', JSON.stringify({
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-      }));
-      
-      return { success: true };
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data?.error || 'E-posta veya şifre hatalı.',
+      };
     }
 
-    // If no user found, return error
-    return { 
-      success: false, 
-      error: 'E-posta veya şifre hatalı.' 
-    };
+    const token = (data as any).accessToken;
+    if (token) {
+      setAuthToken(token);
+    }
+
+    localStorage.setItem('user', JSON.stringify({
+      id: (data as any).id ?? 0,
+      email: (data as any).email ?? credentials.email,
+      fullName: (data as any).fullName ?? '',
+    }));
+
+    return { success: true };
   } catch (error: any) {
     console.error('Login error:', error);
     return { 

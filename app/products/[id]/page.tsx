@@ -30,6 +30,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartMessage, setCartMessage] = useState<string | null>(null);
+  const [cartMessageType, setCartMessageType] = useState<'success' | 'error'>('success');
 
   const handleAddToCart = async () => {
     if (!product) return;
@@ -39,9 +40,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     const qty = qtyInput ? parseInt(qtyInput.value, 10) || 1 : 1;
     const result = await addToCart(product.id, qty);
     if (result.success) {
+      setCartMessageType('success');
       setCartMessage("Ürün sepete eklendi!");
       setTimeout(() => setCartMessage(null), 3000);
     } else {
+      setCartMessageType('error');
       setCartMessage(result.error || "Sepete eklenemedi. Lütfen giriş yapın.");
     }
     setAddingToCart(false);
@@ -314,7 +317,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     </button>
                   </div>
                   {cartMessage && (
-                    <div className={`alert ${cartMessage.includes("eklendi") ? "alert-success" : "alert-warning"} py-2`} role="alert">
+                    <div className={`alert ${cartMessageType === 'success' ? "alert-success" : "alert-warning"} py-2`} role="alert">
                       {cartMessage}
                     </div>
                   )}

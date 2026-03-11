@@ -25,6 +25,7 @@ export default function Navbar() {
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ fullName: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [categories, setCategories] = useState<CategoryMenuItem[]>([]);
   const [cartCount, setCartCount] = useState(0);
 
@@ -47,12 +48,17 @@ export default function Navbar() {
           setCategories(menuCategories);
         }
       } catch (error) {
-        // Silently fail - categories are optional
         console.error("Error fetching categories:", error);
       }
     };
 
     fetchCategories();
+
+    const handleCartUpdate = () => {
+      getCartCount().then(setCartCount).catch(() => {});
+    };
+    window.addEventListener('cart-updated', handleCartUpdate);
+    return () => window.removeEventListener('cart-updated', handleCartUpdate);
   }, []);
 
   const checkAuthStatus = async () => {
@@ -136,24 +142,25 @@ export default function Navbar() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     
     if (registerForm.password !== registerForm.confirmPassword) {
-      alert("Şifreler eşleşmiyor!");
+      setFormError("Şifreler eşleşmiyor!");
       return;
     }
 
     if (registerForm.password.length < 6) {
-      alert("Şifre en az 6 karakter olmalıdır!");
+      setFormError("Şifre en az 6 karakter olmalıdır!");
       return;
     }
 
     if (!registerForm.email || !registerForm.email.includes('@')) {
-      alert("Geçerli bir e-posta adresi giriniz!");
+      setFormError("Geçerli bir e-posta adresi giriniz!");
       return;
     }
 
     if (!registerForm.fullName || registerForm.fullName.trim().length < 2) {
-      alert("Ad Soyad en az 2 karakter olmalıdır!");
+      setFormError("Ad Soyad en az 2 karakter olmalıdır!");
       return;
     }
 
@@ -167,16 +174,18 @@ export default function Navbar() {
       });
 
       if (result.success) {
-        alert("Kayıt başarılı! Giriş yapabilirsiniz.");
+        setFormError(null);
         setShowRegisterModal(false);
         setShowLoginModal(true);
+        setLoginForm({ email: registerForm.email.trim().toLowerCase(), password: "" });
         setRegisterForm({ fullName: "", email: "", password: "", confirmPassword: "" });
+        alert("Kayıt başarılı! Giriş yapabilirsiniz.");
       } else {
-        alert(result.error || "Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+        setFormError(result.error || "Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.");
       }
     } catch (error: any) {
       console.error("Register error:", error);
-      alert(error.message || "Kayıt sırasında bir hata oluştu.");
+      setFormError(error.message || "Kayıt sırasında bir hata oluştu.");
     } finally {
       setLoading(false);
     }
@@ -448,7 +457,7 @@ export default function Navbar() {
                     </li>
                     <li className="d-none d-xl-block">
                       <button
-                        onClick={() => setShowRegisterModal(true)}
+                        onClick={() => { setFormError(null); setShowRegisterModal(true); }}
                         className="btn btn-link text-uppercase p-0 mx-2"
                         style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", border: "none" }}
                       >
@@ -658,6 +667,7 @@ export default function Navbar() {
                   <li className="nav-item">
                     <button
                       onClick={() => {
+                        setFormError(null);
                         setShowRegisterModal(true);
                         const offcanvas = document.getElementById("offcanvasNavbar");
                         if (offcanvas) {
@@ -761,6 +771,11 @@ export default function Navbar() {
               </div>
               <form onSubmit={handleRegister}>
                 <div className="modal-body">
+                  {formError && (
+                    <div className="alert alert-danger py-2 mb-3" role="alert">
+                      {formError}
+                    </div>
+                  )}
                   <div className="mb-3">
                     <label htmlFor="registerFullName" className="form-label">
                       Ad Soyad
@@ -770,7 +785,7 @@ export default function Navbar() {
                       className="form-control"
                       id="registerFullName"
                       value={registerForm.fullName}
-                      onChange={(e) => setRegisterForm({ ...registerForm, fullName: e.target.value })}
+                      onChange={(e) => { setRegisterForm({ ...registerForm, fullName: e.target.value }); setFormError(null); }}
                       required
                     />
                   </div>
@@ -783,7 +798,7 @@ export default function Navbar() {
                       className="form-control"
                       id="registerEmail"
                       value={registerForm.email}
-                      onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
+                      onChange={(e) => { setRegisterForm({ ...registerForm, email: e.target.value }); setFormError(null); }}
                       required
                     />
                   </div>
@@ -796,7 +811,7 @@ export default function Navbar() {
                       className="form-control"
                       id="registerPassword"
                       value={registerForm.password}
-                      onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+                      onChange={(e) => { setRegisterForm({ ...registerForm, password: e.target.value }); setFormError(null); }}
                       required
                     />
                   </div>
@@ -809,13 +824,13 @@ export default function Navbar() {
                       className="form-control"
                       id="registerConfirmPassword"
                       value={registerForm.confirmPassword}
-                      onChange={(e) => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
+                      onChange={(e) => { setRegisterForm({ ...registerForm, confirmPassword: e.target.value }); setFormError(null); }}
                       required
                     />
                   </div>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowRegisterModal(false)} disabled={loading}>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowRegisterModal(false); setFormError(null); }} disabled={loading}>
                     İptal
                   </button>
                   <button type="submit" className="btn btn-primary" disabled={loading}>

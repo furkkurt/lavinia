@@ -145,47 +145,55 @@ export default function AdminUsersPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <nav className="mt-4">
-              <ul className="pagination justify-content-center">
-                <li className={`page-item ${pageIndex === 0 ? "disabled" : ""}`}>
-                  <button
-                    className="page-link"
-                    onClick={() => setPageIndex(pageIndex - 1)}
-                    disabled={pageIndex === 0}
-                  >
-                    Önceki
-                  </button>
-                </li>
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <li
-                    key={i}
-                    className={`page-item ${pageIndex === i ? "active" : ""}`}
-                  >
-                    <button
-                      className="page-link"
-                      onClick={() => setPageIndex(i)}
-                    >
-                      {i + 1}
+          {totalPages > 1 && (() => {
+            const maxVisible = 5;
+            let startPage = Math.max(0, pageIndex - Math.floor(maxVisible / 2));
+            let endPage = Math.min(totalPages - 1, startPage + maxVisible - 1);
+            if (endPage - startPage < maxVisible - 1) {
+              startPage = Math.max(0, endPage - maxVisible + 1);
+            }
+            const pages: number[] = [];
+            for (let i = startPage; i <= endPage; i++) pages.push(i);
+
+            return (
+              <nav className="mt-4">
+                <ul className="pagination justify-content-center">
+                  <li className={`page-item ${pageIndex === 0 ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setPageIndex(0)} disabled={pageIndex === 0} title="İlk sayfa">
+                      &laquo;
                     </button>
                   </li>
-                ))}
-                <li
-                  className={`page-item ${
-                    pageIndex >= totalPages - 1 ? "disabled" : ""
-                  }`}
-                >
-                  <button
-                    className="page-link"
-                    onClick={() => setPageIndex(pageIndex + 1)}
-                    disabled={pageIndex >= totalPages - 1}
-                  >
-                    Sonraki
-                  </button>
-                </li>
-              </ul>
-            </nav>
-          )}
+                  <li className={`page-item ${pageIndex === 0 ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setPageIndex(pageIndex - 1)} disabled={pageIndex === 0} title="Önceki sayfa">
+                      &lsaquo;
+                    </button>
+                  </li>
+                  {pages.map((i) => (
+                    <li key={i} className={`page-item ${pageIndex === i ? "active" : ""}`}>
+                      <button className="page-link" onClick={() => setPageIndex(i)}>
+                        {i + 1}
+                      </button>
+                    </li>
+                  ))}
+                  <li className={`page-item ${pageIndex >= totalPages - 1 ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setPageIndex(pageIndex + 1)} disabled={pageIndex >= totalPages - 1} title="Sonraki sayfa">
+                      &rsaquo;
+                    </button>
+                  </li>
+                  <li className={`page-item ${pageIndex >= totalPages - 1 ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setPageIndex(totalPages - 1)} disabled={pageIndex >= totalPages - 1} title="Son sayfa">
+                      &raquo;
+                    </button>
+                  </li>
+                </ul>
+                <div className="text-center mt-2">
+                  <small className="text-muted">
+                    Sayfa {pageIndex + 1} / {totalPages} (Toplam {total} kullanıcı)
+                  </small>
+                </div>
+              </nav>
+            );
+          })()}
         </div>
       </div>
     </div>

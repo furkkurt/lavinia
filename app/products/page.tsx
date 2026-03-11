@@ -175,14 +175,15 @@ export default function ProductsPage() {
               {products.map((product) => (
                 <div key={product.id} className="col-6 col-md-4 col-lg-3 mb-4">
                   <div className="product-item image-zoom-effect link-effect">
-                    <div className="image-holder position-relative">
+                    <div className="image-holder position-relative" style={{ aspectRatio: "9/16", overflow: "hidden" }}>
                       <Link href={`/products/${product.id}`}>
                         <Image
                           src={getImageUrl(product.thumbnailImageUrl)}
                           alt={product.name}
-                          className="product-image img-fluid"
-                          width={300}
-                          height={400}
+                          className="product-image"
+                          fill
+                          sizes="(max-width: 576px) 50vw, (max-width: 768px) 33vw, 25vw"
+                          style={{ objectFit: "cover" }}
                           unoptimized
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';

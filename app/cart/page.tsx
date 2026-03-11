@@ -6,13 +6,15 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SvgSprite from "../components/SvgSprite";
-import { getCart, updateCartQuantity, removeFromCart, Cart } from "../lib/api/cart";
+import { getCart, updateCartQuantity, removeFromCart, Cart, isLoggedIn as checkLogin } from "../lib/api/cart";
 import { getImageUrl } from "../lib/api/config";
 
 export default function CartPage() {
   const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<number | null>(null);
+  const [requiresAuth, setRequiresAuth] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     const preloader = document.querySelector(".preloader");
@@ -22,8 +24,18 @@ export default function CartPage() {
 
   const fetchCart = async () => {
     setLoading(true);
-    const data = await getCart();
-    setCart(data);
+    setFetchError(null);
+    const result = await getCart();
+    if (result.requiresAuth) {
+      setRequiresAuth(true);
+      setCart(null);
+    } else if (result.error) {
+      setFetchError(result.error);
+      setCart(null);
+    } else {
+      setCart(result.cart);
+      setRequiresAuth(false);
+    }
     setLoading(false);
   };
 
@@ -59,6 +71,24 @@ export default function CartPage() {
             <div className="spinner-border" role="status">
               <span className="visually-hidden">Yükleniyor...</span>
             </div>
+          </div>
+        ) : requiresAuth ? (
+          <div className="text-center py-5">
+            <div style={{ fontSize: "64px", color: "#ccc", marginBottom: "20px" }}>🔒</div>
+            <h4>Sepetinizi görüntülemek için giriş yapın</h4>
+            <p className="text-muted">Sepete ürün eklemek ve siparişlerinizi takip etmek için hesabınıza giriş yapmanız gerekiyor.</p>
+            <Link href="/" className="btn btn-dark mt-3" style={{ borderRadius: "0", padding: "12px 30px" }}>
+              Ana Sayfaya Dön
+            </Link>
+          </div>
+        ) : fetchError ? (
+          <div className="text-center py-5">
+            <div style={{ fontSize: "64px", color: "#ccc", marginBottom: "20px" }}>⚠️</div>
+            <h4>Sepet yüklenirken bir hata oluştu</h4>
+            <p className="text-muted">{fetchError}</p>
+            <button onClick={fetchCart} className="btn btn-dark mt-3" style={{ borderRadius: "0", padding: "12px 30px" }}>
+              Tekrar Dene
+            </button>
           </div>
         ) : isEmpty ? (
           <div className="text-center py-5">
