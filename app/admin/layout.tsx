@@ -130,6 +130,7 @@ export default function AdminLayout({
 
   const menuItems = [
     { href: "/admin", label: "Dashboard", icon: "📊" },
+    { href: "/admin/orders", label: "Siparişler", icon: "📦" },
     { href: "/admin/products", label: "Ürünler", icon: "🛍️" },
     { href: "/admin/users", label: "Kullanıcılar", icon: "👥" },
   ];

@@ -15,6 +15,7 @@ import {
 } from "react-icons/gi";
 import { register, login, adminLogin, getCurrentUser, logout as apiLogout } from "../lib/api/auth";
 import { getMenuCategories, CategoryMenuItem } from "../lib/api/categories";
+import { getCartCount } from "../lib/api/cart";
 
 export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -25,6 +26,7 @@ export default function Navbar() {
   const [registerForm, setRegisterForm] = useState({ fullName: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<CategoryMenuItem[]>([]);
+  const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
     // Check if user is logged in from localStorage
@@ -34,6 +36,7 @@ export default function Navbar() {
     // Try to get current user from API
     if (loggedIn) {
       checkAuthStatus();
+      getCartCount().then(setCartCount).catch(() => {});
     }
 
     // Fetch categories for menu
@@ -92,6 +95,7 @@ export default function Navbar() {
         setShowLoginModal(false);
         setLoginForm({ email: "", password: "" });
         await checkAuthStatus();
+        getCartCount().then(setCartCount).catch(() => {});
       } else {
         // Fall back to customer login (quickSearchUsers)
         const result = await login({
@@ -405,17 +409,21 @@ export default function Navbar() {
                   <>
                     <li className="d-none d-xl-block">
                       <Link
+                        href="/profile"
+                        className="text-uppercase mx-2"
+                        style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", color: "#000" }}
+                      >
+                        Hesabım
+                      </Link>
+                    </li>
+                    <li className="d-none d-xl-block">
+                      <Link
                         href="/admin"
                         className="text-uppercase mx-2"
                         style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", color: "var(--bs-primary)" }}
                       >
                         Admin Panel
                       </Link>
-                    </li>
-                    <li className="d-none d-xl-block">
-                      <span className="text-uppercase mx-2" style={{ whiteSpace: "nowrap", fontSize: "0.875rem", color: "var(--bs-primary)" }}>
-                        Hoşgeldin Admin
-                      </span>
                     </li>
                     <li className="d-none d-xl-block">
                       <button
@@ -456,14 +464,11 @@ export default function Navbar() {
                 </li>
                 <li className="d-none d-xl-block">
                   <Link
-                    href="/"
+                    href="/cart"
                     className="text-uppercase mx-2"
                     style={{ whiteSpace: "nowrap", fontSize: "0.875rem" }}
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#offcanvasCart"
-                    aria-controls="offcanvasCart"
                   >
-                    SEPET <span className="cart-count">(0)</span>
+                    SEPET <span className="cart-count">({cartCount})</span>
                   </Link>
                 </li>
                 <li className="d-xl-none">
@@ -474,16 +479,18 @@ export default function Navbar() {
                   </Link>
                 </li>
                 <li className="d-xl-none">
-                  <Link
-                    href="#"
-                    className="mx-1"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#offcanvasCart"
-                    aria-controls="offcanvasCart"
-                  >
+                  <Link href="/cart" className="mx-1" style={{ position: "relative" }}>
                     <svg width="20" height="20" viewBox="0 0 24 24">
                       <use xlinkHref="#cart"></use>
                     </svg>
+                    {cartCount > 0 && (
+                      <span style={{
+                        position: "absolute", top: "-6px", right: "-6px",
+                        background: "#000", color: "#fff", borderRadius: "50%",
+                        width: "16px", height: "16px", fontSize: "10px",
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }}>{cartCount}</span>
+                    )}
                   </Link>
                 </li>
                 <li className="search-box mx-1">
@@ -605,7 +612,13 @@ export default function Navbar() {
               {isLoggedIn ? (
                 <>
                   <li className="nav-item">
-                    <span className="nav-link text-primary">Hoşgeldin Admin</span>
+                    <Link className="nav-link" href="/profile">Hesabım</Link>
+                  </li>
+                  <li className="nav-item">
+                    <Link className="nav-link" href="/cart">Sepetim ({cartCount})</Link>
+                  </li>
+                  <li className="nav-item">
+                    <Link className="nav-link text-primary" href="/admin">Admin Panel</Link>
                   </li>
                   <li className="nav-item">
                     <button

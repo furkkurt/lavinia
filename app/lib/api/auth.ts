@@ -31,7 +31,7 @@ export async function register(data: RegisterData): Promise<{ success: boolean; 
       body: JSON.stringify({
         fullName: data.fullName,
         email: data.email,
-        phoneNumber: data.phoneNumber || '',
+        ...(data.phoneNumber ? { phoneNumber: data.phoneNumber } : {}),
         password: data.password,
       }),
     });
@@ -155,10 +155,15 @@ export async function adminLogin(credentials: AdminLoginCredentials): Promise<{ 
   }
 }
 
-// Get current user - check if user is authenticated
-// Note: This endpoint doesn't exist in the API, so we return null
+// Get current user from localStorage (admin or regular user)
 export async function getCurrentUser(): Promise<any | null> {
-  // Endpoint doesn't exist, return null silently
+  if (typeof window === 'undefined') return null;
+  try {
+    const adminStr = localStorage.getItem('adminUser');
+    if (adminStr) return JSON.parse(adminStr);
+    const userStr = localStorage.getItem('user');
+    if (userStr) return JSON.parse(userStr);
+  } catch {}
   return null;
 }
 

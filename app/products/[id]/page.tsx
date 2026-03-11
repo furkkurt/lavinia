@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getProduct, getProductsGrid, Product } from "../../lib/api/products";
 import { getImageUrl } from "../../lib/api/config";
+import { addToCart } from "../../lib/api/cart";
 
 declare global {
   namespace JSX {
@@ -21,12 +22,31 @@ declare global {
   }
 }
 
-export default function ProductDetailPage({ params }: { params: { id: string } }) {
-  const productId = parseInt(params.id, 10);
+export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
+  const productId = parseInt(id, 10);
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [cartMessage, setCartMessage] = useState<string | null>(null);
+
+  const handleAddToCart = async () => {
+    if (!product) return;
+    setAddingToCart(true);
+    setCartMessage(null);
+    const qtyInput = document.getElementById("quantity") as HTMLInputElement;
+    const qty = qtyInput ? parseInt(qtyInput.value, 10) || 1 : 1;
+    const result = await addToCart(product.id, qty);
+    if (result.success) {
+      setCartMessage("Ürün sepete eklendi!");
+      setTimeout(() => setCartMessage(null), 3000);
+    } else {
+      setCartMessage(result.error || "Sepete eklenemedi. Lütfen giriş yapın.");
+    }
+    setAddingToCart(false);
+  };
+
   useEffect(() => {
     const preloader = document.querySelector(".preloader");
     if (preloader) {
@@ -282,9 +302,10 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   <div className="product-actions d-flex gap-3 mb-4">
                     <button 
                       className="btn btn-dark btn-lg text-uppercase flex-grow-1"
-                      disabled={product.stockQuantity === 0}
+                      disabled={product.stockQuantity === 0 || addingToCart}
+                      onClick={handleAddToCart}
                     >
-                      {product.stockQuantity && product.stockQuantity > 0 ? "Sepete Ekle" : "Stokta Yok"}
+                      {addingToCart ? "Ekleniyor..." : (product.stockQuantity && product.stockQuantity > 0 ? "Sepete Ekle" : "Stokta Yok")}
                     </button>
                     <button className="btn btn-outline-dark btn-lg">
                       <svg width="24" height="24" viewBox="0 0 24 24">
@@ -292,6 +313,11 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                       </svg>
                     </button>
                   </div>
+                  {cartMessage && (
+                    <div className={`alert ${cartMessage.includes("eklendi") ? "alert-success" : "alert-warning"} py-2`} role="alert">
+                      {cartMessage}
+                    </div>
+                  )}
 
                   {product.stockQuantity !== undefined && (
                     <p className={product.stockQuantity > 0 ? "text-success mb-0" : "text-danger mb-0"}>
