@@ -4,6 +4,12 @@ import path from "path";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname),
+  async redirects() {
+    return [
+      { source: "/woman", destination: "/products?category=woman", permanent: false },
+      { source: "/man", destination: "/products?category=man", permanent: false },
+    ];
+  },
   images: {
     remotePatterns: [
       {
