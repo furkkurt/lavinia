@@ -165,6 +165,30 @@ export async function adminLogin(credentials: AdminLoginCredentials): Promise<{ 
   }
 }
 
+// Decode JWT payload to extract claims (no validation, client-side only)
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload));
+  } catch {
+    return null;
+  }
+}
+
+// Check if current user has admin role (from JWT token)
+export function isAdmin(): boolean {
+  if (typeof window === 'undefined') return false;
+  const token = getAuthToken();
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return false;
+  const role = payload.role;
+  if (Array.isArray(role)) return role.includes('admin');
+  return role === 'admin';
+}
+
 // Get current user from localStorage (admin or regular user)
 export async function getCurrentUser(): Promise<any | null> {
   if (typeof window === 'undefined') return null;

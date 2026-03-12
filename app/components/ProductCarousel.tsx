@@ -159,7 +159,7 @@ export default function ProductCarousel({
                     <h5 className="element-title text-uppercase fs-6 mt-3">
                       <Link href={`/products/${product.id}`}>{product.title}</Link>
                     </h5>
-                    <Link href={`/products/${product.id}`} className="text-decoration-none">
+                    <Link href={`/products/${product.id}`} className="text-decoration-none" data-after="Sepete Ekle">
                       <span>{product.price}</span>
                     </Link>
                   </div>

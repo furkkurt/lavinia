@@ -13,7 +13,7 @@ import {
   GiDress,
   GiShorts
 } from "react-icons/gi";
-import { register, login, adminLogin, getCurrentUser, logout as apiLogout } from "../lib/api/auth";
+import { register, login, adminLogin, getCurrentUser, logout as apiLogout, isAdmin } from "../lib/api/auth";
 import { getMenuCategories, CategoryMenuItem } from "../lib/api/categories";
 import { getCartCount } from "../lib/api/cart";
 
@@ -28,6 +28,7 @@ export default function Navbar() {
   const [formError, setFormError] = useState<string | null>(null);
   const [categories, setCategories] = useState<CategoryMenuItem[]>([]);
   const [cartCount, setCartCount] = useState(0);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in from localStorage
@@ -62,7 +63,6 @@ export default function Navbar() {
   }, []);
 
   const checkAuthStatus = async () => {
-    // Check localStorage for user (customer) or adminUser (admin)
     const loggedIn = localStorage.getItem("isLoggedIn") === "true";
     const userStr = localStorage.getItem("user");
     const adminStr = localStorage.getItem("adminUser");
@@ -77,11 +77,13 @@ export default function Navbar() {
           setCurrentUser(user);
         }
         setIsLoggedIn(true);
+        setUserIsAdmin(isAdmin());
       } catch {
         setIsLoggedIn(loggedIn);
       }
     } else {
       setIsLoggedIn(false);
+      setUserIsAdmin(false);
     }
   };
 
@@ -425,15 +427,17 @@ export default function Navbar() {
                         Hesabım
                       </Link>
                     </li>
-                    <li className="d-none d-xl-block">
-                      <Link
-                        href="/admin"
-                        className="text-uppercase mx-2"
-                        style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", color: "var(--bs-primary)" }}
-                      >
-                        Admin Panel
-                      </Link>
-                    </li>
+                    {userIsAdmin && (
+                      <li className="d-none d-xl-block">
+                        <Link
+                          href="/admin"
+                          className="text-uppercase mx-2"
+                          style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", color: "var(--bs-primary)" }}
+                        >
+                          Admin Panel
+                        </Link>
+                      </li>
+                    )}
                     <li className="d-none d-xl-block">
                       <button
                         onClick={handleLogout}
@@ -626,9 +630,11 @@ export default function Navbar() {
                   <li className="nav-item">
                     <Link className="nav-link" href="/cart">Sepetim ({cartCount})</Link>
                   </li>
-                  <li className="nav-item">
-                    <Link className="nav-link text-primary" href="/admin">Admin Panel</Link>
-                  </li>
+                  {userIsAdmin && (
+                    <li className="nav-item">
+                      <Link className="nav-link text-primary" href="/admin">Admin Panel</Link>
+                    </li>
+                  )}
                   <li className="nav-item">
                     <button
                       onClick={() => {
