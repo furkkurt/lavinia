@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiFetch, setAuthToken, removeAuthToken } from './config';
+import { API_BASE_URL, apiFetch, setAuthToken, removeAuthToken, getAuthToken } from './config';
 
 export interface LoginCredentials {
   email: string;
