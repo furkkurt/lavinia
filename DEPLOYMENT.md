@@ -36,3 +36,10 @@ pm2 restart lavinia
 
 - **400 on register**: Ensure `NEXT_PUBLIC_API_BASE_URL` was set **before** `npm run build`. Rebuild after changing it.
 - **404 on /woman, /man**: These redirect to `/products?category=woman` and `/products?category=man` automatically.
+- **500 on address save**: The backend database needs Turkey (TR) and Turkish provinces. Run on your VPS:
+  ```bash
+  cd /srv/boutique   # or your backend project path
+  cat src/Database/StaticData-TR-Postgres.sql | docker exec -i boutique_db psql -U postgres -d SimplCommerce
+  # Or if PostgreSQL runs directly (no Docker):
+  # psql -U postgres -d SimplCommerce -f src/Database/StaticData-TR-Postgres.sql
+  ```

@@ -77,7 +77,9 @@ export default function ProfilePage() {
     }
     setAddrSubmitting(true);
     setAddrError(null);
-    const data = { ...addrForm, stateOrProvinceId: addrForm.stateOrProvinceId || 1 };
+    // TR için varsayılan İstanbul (133); diğer ülkeler için mevcut state
+    const defaultState = addrForm.countryId === "TR" ? 133 : 1;
+    const data = { ...addrForm, stateOrProvinceId: addrForm.stateOrProvinceId || defaultState };
     let ok: boolean;
     if (editingAddr) {
       ok = await updateAddress(editingAddr, data);
