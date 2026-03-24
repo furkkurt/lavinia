@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-export default function SwiperInit() {
+export default function SwiperInit({ reinitKey }: { reinitKey?: number | string } = {}) {
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
     let initTimeoutId: NodeJS.Timeout | null = null;
@@ -196,38 +196,39 @@ export default function SwiperInit() {
       }
 
       // Initialize product detail page sliders
-      const productThumbnailSliderEl = document.querySelector(".product-thumbnail-slider");
       const productLargeSliderEl = document.querySelector(".product-large-slider");
+      const productThumbnailSliderEl = document.querySelector(".product-thumbnail-slider");
       
-      if (productThumbnailSliderEl && productLargeSliderEl) {
-        // Product thumbnail slider (always horizontal)
-        const thumbnailSwiper = new window.Swiper(".product-thumbnail-slider", {
-          slidesPerView: 3,
-          spaceBetween: 15,
-          direction: "horizontal",
-          breakpoints: {
-            0: {
-              slidesPerView: 3,
-              spaceBetween: 10,
-            },
-            768: {
-              slidesPerView: 3,
-              spaceBetween: 15,
-            },
-          },
-        });
+      if (productLargeSliderEl) {
+        let thumbnailSwiper: any = null;
 
-        // Product large slider (main image)
+        if (productThumbnailSliderEl) {
+          thumbnailSwiper = new window.Swiper(".product-thumbnail-slider", {
+            slidesPerView: 3,
+            spaceBetween: 15,
+            direction: "horizontal",
+            slideToClickedSlide: true,
+            watchSlidesProgress: true,
+            breakpoints: {
+              0: { slidesPerView: 3, spaceBetween: 10 },
+              768: { slidesPerView: 4, spaceBetween: 15 },
+            },
+          });
+        }
+
+        const prevBtn = productLargeSliderEl.querySelector(".product-slider-prev");
+        const nextBtn = productLargeSliderEl.querySelector(".product-slider-next");
+
         new window.Swiper(".product-large-slider", {
           slidesPerView: 1,
           spaceBetween: 0,
           effect: "fade",
-          fadeEffect: {
-            crossFade: true,
-          },
-          thumbs: {
-            swiper: thumbnailSwiper,
-          },
+          fadeEffect: { crossFade: true },
+          thumbs: thumbnailSwiper ? { swiper: thumbnailSwiper } : undefined,
+          navigation: (prevBtn && nextBtn) ? {
+            prevEl: prevBtn as HTMLElement,
+            nextEl: nextBtn as HTMLElement,
+          } : false,
           pagination: {
             el: ".product-large-slider .swiper-pagination",
             clickable: true,
@@ -272,7 +273,7 @@ export default function SwiperInit() {
         });
       }
     };
-  }, []);
+  }, [reinitKey]);
 
   return null;
 }

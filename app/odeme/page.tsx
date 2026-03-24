@@ -8,8 +8,8 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SvgSprite from "../components/SvgSprite";
 import { createCheckout, getCheckoutSummary, completeCheckout, CheckoutSummary } from "../lib/api/checkout";
-import { getAddresses, createAddress, UserAddress, AddressFormData } from "../lib/api/addresses";
-import { getImageUrl } from "../lib/api/config";
+import { getAddresses, createAddress, UserAddress, AddressFormData, getStates } from "../lib/api/addresses";
+import { getImageUrl, getAuthToken } from "../lib/api/config";
 
 type Step = "address" | "summary" | "success";
 
@@ -33,6 +33,7 @@ export default function CheckoutPage() {
   const [orderNote, setOrderNote] = useState("");
   const [orderId, setOrderId] = useState<number | null>(null);
   const [orderTotal, setOrderTotal] = useState("");
+  const [provinces, setProvinces] = useState<{ id: number; name: string }[]>([]);
 
   useEffect(() => {
     const preloader = document.querySelector(".preloader");
@@ -40,27 +41,39 @@ export default function CheckoutPage() {
     init();
   }, []);
 
+  const isGuest = typeof window !== "undefined" && !getAuthToken();
+
   const init = async () => {
     setLoading(true);
-    const addrs = await getAddresses();
-    setAddresses(addrs);
-    if (addrs.length > 0) {
-      const defaultAddr = addrs.find((a) => a.isDefault);
-      setSelectedAddressId(defaultAddr ? defaultAddr.id : addrs[0].id);
-    } else {
+    try {
+      const states = await getStates("TR");
+      setProvinces(states);
+    } catch (e) {
+      console.error("[Ödeme] İl listesi yüklenemedi:", e);
+    }
+    if (isGuest) {
       setShowNewAddress(true);
+    } else {
+      const addrs = await getAddresses();
+      setAddresses(addrs);
+      if (addrs.length > 0) {
+        const defaultAddr = addrs.find((a) => a.isDefault);
+        setSelectedAddressId(defaultAddr ? defaultAddr.id : addrs[0].id);
+      } else {
+        setShowNewAddress(true);
+      }
     }
     setLoading(false);
   };
 
   const handleCreateAddress = async () => {
-    if (!newAddress.contactName || !newAddress.phone || !newAddress.addressLine1 || !newAddress.city) {
+    if (!newAddress.contactName || !newAddress.phone || !newAddress.addressLine1 || !newAddress.stateOrProvinceId) {
       setError("Lütfen tüm zorunlu alanları doldurun");
       return;
     }
     setSubmitting(true);
     setError(null);
-    const ok = await createAddress({ ...newAddress, stateOrProvinceId: newAddress.stateOrProvinceId || 1 });
+    const ok = await createAddress(newAddress);
     if (ok) {
       const addrs = await getAddresses();
       setAddresses(addrs);
@@ -75,8 +88,11 @@ export default function CheckoutPage() {
   };
 
   const handleProceedToSummary = async () => {
-    if (selectedAddressId === 0) {
-      setError("Lütfen bir teslimat adresi seçin");
+    const hasValidAddress = isGuest
+      ? (newAddress.contactName && newAddress.phone && newAddress.addressLine1 && newAddress.stateOrProvinceId)
+      : (selectedAddressId > 0);
+    if (!hasValidAddress) {
+      setError(isGuest ? "Lütfen teslimat adresi bilgilerini doldurun" : "Lütfen bir teslimat adresi seçin");
       return;
     }
     setSubmitting(true);
@@ -101,7 +117,18 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setError(null);
 
-    const result = await completeCheckout(checkoutId, selectedAddressId, orderNote);
+    const result = isGuest
+      ? await completeCheckout(checkoutId, 0, orderNote, {
+          contactName: newAddress.contactName,
+          phone: newAddress.phone,
+          addressLine1: newAddress.addressLine1,
+          addressLine2: newAddress.addressLine2,
+          city: newAddress.city || "",
+          zipCode: newAddress.zipCode,
+          stateOrProvinceId: newAddress.stateOrProvinceId,
+          countryId: newAddress.countryId || "TR",
+        })
+      : await completeCheckout(checkoutId, selectedAddressId, orderNote);
     if (result.success && result.data) {
       setOrderId(result.data.orderId);
       setOrderTotal(result.data.orderTotalString);
@@ -113,6 +140,7 @@ export default function CheckoutPage() {
   };
 
   const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
+  const displayAddr = isGuest ? { contactName: newAddress.contactName, phone: newAddress.phone, addressLine1: newAddress.addressLine1, city: newAddress.city, stateOrProvinceName: "" } : selectedAddr;
 
   return (
     <>
@@ -154,7 +182,7 @@ export default function CheckoutPage() {
             <div className="col-lg-8">
               <h4 style={{ fontFamily: "var(--font-marcellus)", marginBottom: "20px" }}>Teslimat Adresi</h4>
 
-              {addresses.length > 0 && !showNewAddress && (
+              {!isGuest && addresses.length > 0 && !showNewAddress && (
                 <div className="mb-4">
                   {addresses.map((addr) => (
                     <div
@@ -186,19 +214,22 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                   ))}
-                  <button
-                    className="btn btn-outline-dark btn-sm mt-2"
-                    style={{ borderRadius: 0 }}
-                    onClick={() => setShowNewAddress(true)}
-                  >
-                    + Yeni Adres Ekle
-                  </button>
+                  {!isGuest && (
+                    <button
+                      className="btn btn-outline-dark btn-sm mt-2"
+                      style={{ borderRadius: 0 }}
+                      onClick={() => setShowNewAddress(true)}
+                    >
+                      + Yeni Adres Ekle
+                    </button>
+                  )}
                 </div>
               )}
 
-              {showNewAddress && (
+              {(showNewAddress || isGuest) && (
                 <div className="p-4 mb-4" style={{ border: "1px solid #e5e5e5" }}>
-                  <h6 className="mb-3">Yeni Adres</h6>
+                  <h6 className="mb-3">{isGuest ? "Teslimat Bilgileri (Misafir)" : "Yeni Adres"}</h6>
+                  {isGuest && <p className="text-muted small mb-3">Misafir olarak alışveriş yapıyorsunuz.</p>}
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label">Ad Soyad *</label>
@@ -231,14 +262,22 @@ export default function CheckoutPage() {
                       />
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label">Şehir *</label>
-                      <input
-                        type="text"
-                        className="form-control"
+                      <label className="form-label">İl *</label>
+                      <select
+                        className="form-select"
                         style={{ borderRadius: 0 }}
-                        value={newAddress.city || ""}
-                        onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                      />
+                        value={newAddress.stateOrProvinceId || ""}
+                        onChange={(e) => {
+                          const id = Number(e.target.value);
+                          const prov = provinces.find((p) => p.id === id);
+                          setNewAddress({ ...newAddress, stateOrProvinceId: id, city: prov?.name || "" });
+                        }}
+                      >
+                        <option value="">İl seçiniz</option>
+                        {provinces.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="col-md-6">
                       <label className="form-label">İlçe</label>
@@ -251,25 +290,27 @@ export default function CheckoutPage() {
                       />
                     </div>
                   </div>
-                  <div className="mt-3 d-flex gap-2">
-                    <button
-                      className="btn btn-dark"
-                      style={{ borderRadius: 0 }}
-                      onClick={handleCreateAddress}
-                      disabled={submitting}
-                    >
-                      {submitting ? "Kaydediliyor..." : "Adresi Kaydet"}
-                    </button>
-                    {addresses.length > 0 && (
+                  {!isGuest && (
+                    <div className="mt-3 d-flex gap-2">
                       <button
-                        className="btn btn-outline-secondary"
+                        className="btn btn-dark"
                         style={{ borderRadius: 0 }}
-                        onClick={() => setShowNewAddress(false)}
+                        onClick={handleCreateAddress}
+                        disabled={submitting}
                       >
-                        İptal
+                        {submitting ? "Kaydediliyor..." : "Adresi Kaydet"}
                       </button>
-                    )}
-                  </div>
+                      {addresses.length > 0 && (
+                        <button
+                          className="btn btn-outline-secondary"
+                          style={{ borderRadius: 0 }}
+                          onClick={() => setShowNewAddress(false)}
+                        >
+                          İptal
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -277,7 +318,7 @@ export default function CheckoutPage() {
                 className="btn btn-dark mt-3"
                 style={{ borderRadius: 0, padding: "14px 40px", fontSize: "15px" }}
                 onClick={handleProceedToSummary}
-                disabled={submitting || selectedAddressId === 0}
+                disabled={submitting || (!isGuest && selectedAddressId === 0) || (isGuest && !(newAddress.contactName && newAddress.phone && newAddress.addressLine1 && newAddress.stateOrProvinceId))}
               >
                 {submitting ? "Yükleniyor..." : "Devam Et"}
               </button>
@@ -288,14 +329,14 @@ export default function CheckoutPage() {
             <div className="col-lg-8">
               <h4 style={{ fontFamily: "var(--font-marcellus)", marginBottom: "20px" }}>Sipariş Özeti</h4>
 
-              {selectedAddr && (
+              {displayAddr && (
                 <div className="p-3 mb-4" style={{ border: "1px solid #e5e5e5", background: "#fafafa" }}>
                   <small className="text-muted d-block mb-1">Teslimat Adresi</small>
-                  <strong>{selectedAddr.contactName}</strong> - {selectedAddr.phone}
+                  <strong>{displayAddr.contactName}</strong> - {displayAddr.phone}
                   <br />
-                  {selectedAddr.addressLine1}
-                  {selectedAddr.city && <>, {selectedAddr.city}</>}
-                  {selectedAddr.stateOrProvinceName && <> / {selectedAddr.stateOrProvinceName}</>}
+                  {displayAddr.addressLine1}
+                  {displayAddr.city && <>, {displayAddr.city}</>}
+                  {"stateOrProvinceName" in displayAddr && displayAddr.stateOrProvinceName && <> / {displayAddr.stateOrProvinceName}</>}
                 </div>
               )}
 
@@ -319,6 +360,7 @@ export default function CheckoutPage() {
                               width={50}
                               height={60}
                               style={{ objectFit: "cover" }}
+                              onError={(e) => { (e.target as HTMLImageElement).src = '/images/product-item-1.jpg'; }}
                             />
                             <span>{item.productName}</span>
                           </div>
@@ -410,17 +452,19 @@ export default function CheckoutPage() {
             <p>
               Toplam: <strong>{orderTotal}</strong>
             </p>
-            <p className="text-muted">Siparişinizin durumunu profilinizden takip edebilirsiniz.</p>
+            <p className="text-muted">{isGuest ? "Siparişiniz e-posta ile bildirilecektir." : "Siparişinizin durumunu profilinizden takip edebilirsiniz."}</p>
             <div className="mt-4 d-flex justify-content-center gap-3">
+              {!isGuest && (
+                <Link
+                  href="/profil"
+                  className="btn btn-dark"
+                  style={{ borderRadius: 0, padding: "12px 30px" }}
+                >
+                  Siparişlerim
+                </Link>
+              )}
               <Link
-                href="/profile"
-                className="btn btn-dark"
-                style={{ borderRadius: 0, padding: "12px 30px" }}
-              >
-                Siparişlerim
-              </Link>
-              <Link
-                href="/products"
+                href="/urunler"
                 className="btn btn-outline-dark"
                 style={{ borderRadius: 0, padding: "12px 30px" }}
               >

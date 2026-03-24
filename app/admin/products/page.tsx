@@ -115,7 +115,6 @@ export default function AdminProductsPage() {
                           height={50}
                           style={{ objectFit: "cover" }}
                           className="rounded"
-                          unoptimized
                         />
                       ) : (
                         <div

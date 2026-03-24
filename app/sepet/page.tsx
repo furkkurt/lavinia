@@ -95,7 +95,7 @@ export default function CartPage() {
             <div style={{ fontSize: "64px", color: "#ccc", marginBottom: "20px" }}>🛒</div>
             <h4>Sepetiniz boş</h4>
             <p className="text-muted">Alışverişe başlamak için ürünlerimize göz atın.</p>
-            <Link href="/products" className="btn btn-dark mt-3" style={{ borderRadius: "0", padding: "12px 30px" }}>
+            <Link href="/urunler" className="btn btn-dark mt-3" style={{ borderRadius: "0", padding: "12px 30px" }}>
               Alışverişe Başla
             </Link>
           </div>
@@ -118,18 +118,19 @@ export default function CartPage() {
                       <tr key={item.productId} style={{ opacity: updating === item.productId ? 0.5 : 1 }}>
                         <td>
                           <div className="d-flex align-items-center gap-3">
-                            <Link href={`/products/${item.productId}`}>
+                            <Link href={`/urunler/${item.productId}`}>
                               <Image
                                 src={getImageUrl(item.productImage)}
                                 alt={item.productName}
                                 width={80}
                                 height={100}
                                 style={{ objectFit: "cover" }}
+                                onError={(e) => { (e.target as HTMLImageElement).src = '/images/product-item-1.jpg'; }}
                               />
                             </Link>
                             <div>
                               <Link
-                                href={`/products/${item.productId}`}
+                                href={`/urunler/${item.productId}`}
                                 style={{ color: "#000", textDecoration: "none", fontWeight: 500 }}
                               >
                                 {item.productName}
@@ -204,14 +205,14 @@ export default function CartPage() {
                   <span>{cart!.subTotalWithDiscountString}</span>
                 </div>
                 <Link
-                  href="/checkout"
+                  href="/odeme"
                   className="btn btn-dark w-100 mt-4"
                   style={{ borderRadius: 0, padding: "14px", fontSize: "15px", letterSpacing: "1px" }}
                 >
                   SİPARİŞİ TAMAMLA
                 </Link>
                 <Link
-                  href="/products"
+                  href="/urunler"
                   className="btn btn-outline-dark w-100 mt-2"
                   style={{ borderRadius: 0, padding: "12px", fontSize: "14px" }}
                 >

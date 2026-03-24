@@ -11,3 +11,50 @@
   --font-sans: var(--font-jost);
   --font-mono: var(--font-marcellus);
 }
+
+/* Anasayfa kategori kartı — görsel değişiminde yumuşak giriş */
+@keyframes homeCategoryThumbEnter {
+  from {
+    opacity: 0;
+    transform: scale(1.07);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.home-category-thumb-animate {
+  animation: homeCategoryThumbEnter 0.78s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Mağaza mega menü — Diğer (alt kategorisi olmayan) ayrı buton */
+.mega-menu-diger-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.85rem 1.1rem;
+  border: 2px solid #212529;
+  color: #212529;
+  background: #fff;
+  text-decoration: none;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition:
+    background-color 0.28s ease,
+    color 0.28s ease,
+    border-color 0.28s ease,
+    transform 0.28s ease,
+    box-shadow 0.28s ease;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.mega-menu-diger-btn:hover {
+  background: #212529;
+  color: #fff;
+  border-color: #212529;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}

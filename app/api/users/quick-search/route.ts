@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://23.95.193.212:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://31.210.43.159:5000';
 
 export async function GET(request: NextRequest) {
   try {

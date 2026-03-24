@@ -3,20 +3,25 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { getProduct, updateProduct, Product } from "../../../lib/api/products";
+import { getProduct, updateProduct, createProduct, Product } from "../../../lib/api/products";
 import { getBrands, Brand } from "../../../lib/api/brands";
 import { getCategories, Category } from "../../../lib/api/categories";
+import { importProductImages } from "../../../lib/api/legacyImport";
 
 export default function EditProductPage() {
   const router = useRouter();
   const params = useParams();
-  const id = params?.id ? Number(params.id) : NaN;
+  const rawId = params?.id as string | undefined;
+  const id = rawId && rawId !== "create" && !isNaN(Number(rawId)) ? Number(rawId) : null;
+  const isCreateMode = rawId === "create" || !rawId;
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedMainCategoryId, setSelectedMainCategoryId] = useState<number | null>(null);
   const [productImages, setProductImages] = useState<File[]>([]);
   const [thumbnailImage, setThumbnailImage] = useState<File | null>(null);
+  const [importingImages, setImportingImages] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Product>>({
     name: "",
@@ -29,6 +34,8 @@ export default function EditProductPage() {
     price: 0,
     oldPrice: 0,
     specialPrice: 0,
+    specialPriceStart: "",
+    specialPriceEnd: "",
     stockQuantity: 0,
     isPublished: false,
     isFeatured: false,
@@ -41,11 +48,17 @@ export default function EditProductPage() {
   });
 
   useEffect(() => {
-    if (!id || isNaN(id)) {
-      setFetching(false);
-      return;
-    }
     const fetchData = async () => {
+      if (isCreateMode || !id) {
+        const [brandsData, categoriesData] = await Promise.all([
+          getBrands(),
+          getCategories(),
+        ]);
+        if (brandsData) setBrands(brandsData);
+        if (categoriesData) setCategories(categoriesData);
+        setFetching(false);
+        return;
+      }
       const [product, brandsData, categoriesData] = await Promise.all([
         getProduct(id),
         getBrands(),
@@ -54,6 +67,16 @@ export default function EditProductPage() {
       if (brandsData) setBrands(brandsData);
       if (categoriesData) setCategories(categoriesData);
       if (product) {
+        const catIds = product.categoryIds ?? [];
+        let mainId: number | null = null;
+        if (catIds.length > 0 && categoriesData) {
+          const firstCatId = catIds[0];
+          const cat = categoriesData.find((c) => c.id === firstCatId);
+          if (cat) {
+            mainId = cat.parentId ?? firstCatId;
+          }
+        }
+        setSelectedMainCategoryId((prev) => (mainId != null ? mainId : prev));
         setFormData({
           id: product.id,
           name: product.name ?? "",
@@ -66,6 +89,8 @@ export default function EditProductPage() {
           price: product.price ?? 0,
           oldPrice: product.oldPrice ?? 0,
           specialPrice: product.specialPrice ?? 0,
+          specialPriceStart: product.specialPriceStart ? product.specialPriceStart.substring(0, 10) : "",
+          specialPriceEnd: product.specialPriceEnd ? product.specialPriceEnd.substring(0, 10) : "",
           stockQuantity: product.stockQuantity ?? 0,
           isPublished: product.isPublished ?? false,
           isFeatured: product.isFeatured ?? false,
@@ -80,7 +105,7 @@ export default function EditProductPage() {
       setFetching(false);
     };
     fetchData();
-  }, [id]);
+  }, [id, isCreateMode]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -89,10 +114,15 @@ export default function EditProductPage() {
     const checked = (e.target as HTMLInputElement).checked;
     if (type === "checkbox") {
       setFormData((prev) => ({ ...prev, [name]: checked }));
-    } else if (name === "categoryIds") {
-      const select = e.target as HTMLSelectElement;
-      const selectedIds = Array.from(select.selectedOptions).map((opt) => parseInt(opt.value));
-      setFormData((prev) => ({ ...prev, categoryIds: selectedIds }));
+    } else if (name === "mainCategoryId") {
+      const mainId = value ? parseInt(value) : null;
+      setSelectedMainCategoryId(mainId);
+      const subs = categories.filter((c) => c.parentId === mainId);
+      const newCatIds = mainId && subs.length === 0 ? [mainId] : [];
+      setFormData((prev) => ({ ...prev, categoryIds: newCatIds }));
+    } else if (name === "subCategoryId") {
+      const subId = value ? parseInt(value) : null;
+      setFormData((prev) => ({ ...prev, categoryIds: subId ? [subId] : [] }));
     } else if (name === "price" || name === "oldPrice" || name === "specialPrice" || name === "stockQuantity") {
       setFormData((prev) => ({ ...prev, [name]: parseFloat(value) || 0 }));
     } else {
@@ -108,9 +138,21 @@ export default function EditProductPage() {
     if (e.target.files) setProductImages(Array.from(e.target.files));
   };
 
+  const handleImportProductImages = async () => {
+    if (!id || isCreateMode) return;
+    setImportingImages(true);
+    const res = await importProductImages(id);
+    setImportingImages(false);
+    if (res.success) {
+      alert("Görseller productImages klasöründen içe aktarıldı.");
+      window.location.reload();
+    } else {
+      alert(res.error || "Görsel içe aktarma başarısız. productImages klasörünün mevcut olduğundan emin olun.");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || isNaN(id)) return;
     setLoading(true);
     try {
       const payload: Partial<Product> = {
@@ -118,22 +160,32 @@ export default function EditProductPage() {
         thumbnailImage: thumbnailImage ?? undefined,
         productImages: productImages.map((img) => ({ image: img })),
       };
-      const result = await updateProduct(id, payload);
-      if (result) {
-        alert("Ürün güncellendi.");
-        router.push("/admin/products");
-      } else {
-        alert("Güncelleme sırasında bir hata oluştu.");
+      if (isCreateMode) {
+        const result = await createProduct(payload);
+        if (result) {
+          alert("Ürün oluşturuldu.");
+          router.push("/admin/products");
+        } else {
+          alert("Ürün oluşturulurken bir hata oluştu.");
+        }
+      } else if (id) {
+        const result = await updateProduct(id, payload);
+        if (result) {
+          alert("Ürün güncellendi.");
+          router.push("/admin/products");
+        } else {
+          alert("Güncelleme sırasında bir hata oluştu.");
+        }
       }
     } catch (err) {
-      console.error("Error updating product:", err);
-      alert("Güncelleme sırasında bir hata oluştu.");
+      console.error("Error saving product:", err);
+      alert(isCreateMode ? "Ürün oluşturulurken bir hata oluştu." : "Güncelleme sırasında bir hata oluştu.");
     } finally {
       setLoading(false);
     }
   };
 
-  if (fetching) {
+  if (fetching && !isCreateMode) {
     return (
       <div className="d-flex justify-content-center align-items-center py-5">
         <div className="spinner-border" role="status">
@@ -143,7 +195,7 @@ export default function EditProductPage() {
     );
   }
 
-  if (!formData.name && !fetching) {
+  if (!isCreateMode && !formData.name && !fetching) {
     return (
       <div>
         <p>Ürün bulunamadı.</p>
@@ -157,7 +209,7 @@ export default function EditProductPage() {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Ürünü Düzenle</h1>
+        <h1>{isCreateMode ? "Yeni Ürün Ekle" : "Ürünü Düzenle"}</h1>
         <Link href="/admin/products" className="btn btn-secondary">
           Geri Dön
         </Link>
@@ -194,7 +246,7 @@ export default function EditProductPage() {
                 />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">SKU</label>
+                <label className="form-label">Stok Kodu (SKU)</label>
                 <input
                   type="text"
                   className="form-control"
@@ -204,7 +256,7 @@ export default function EditProductPage() {
                 />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">GTIN</label>
+                <label className="form-label">Barkod (GTIN)</label>
                 <input
                   type="text"
                   className="form-control"
@@ -214,17 +266,18 @@ export default function EditProductPage() {
                 />
               </div>
               <div className="col-12 mb-3">
-                <label className="form-label">Kısa Açıklama</label>
+                <label className="form-label">Ön Yazı (ONYAZI)</label>
                 <textarea
                   className="form-control"
                   name="shortDescription"
                   rows={3}
                   value={formData.shortDescription}
                   onChange={handleInputChange}
+                  placeholder="HTML veya düz metin. Sitede format otomatik algılanır."
                 />
               </div>
               <div className="col-12 mb-3">
-                <label className="form-label">Açıklama</label>
+                <label className="form-label">Açıklama (ACIKLAMA)</label>
                 <textarea
                   className="form-control"
                   name="description"
@@ -255,7 +308,7 @@ export default function EditProductPage() {
             <div className="row">
               <div className="col-md-4 mb-3">
                 <label className="form-label">
-                  Fiyat <span className="text-danger">*</span>
+                  Satış Fiyatı <span className="text-danger">*</span>
                 </label>
                 <input
                   type="number"
@@ -268,7 +321,7 @@ export default function EditProductPage() {
                 />
               </div>
               <div className="col-md-4 mb-3">
-                <label className="form-label">Eski Fiyat</label>
+                <label className="form-label">Piyasa Fiyatı</label>
                 <input
                   type="number"
                   step="0.01"
@@ -279,7 +332,7 @@ export default function EditProductPage() {
                 />
               </div>
               <div className="col-md-4 mb-3">
-                <label className="form-label">Özel Fiyat</label>
+                <label className="form-label">İndirimli Fiyat</label>
                 <input
                   type="number"
                   step="0.01"
@@ -288,9 +341,30 @@ export default function EditProductPage() {
                   value={formData.specialPrice}
                   onChange={handleInputChange}
                 />
+                <small className="text-muted">0 = indirim yok. Satış fiyatından düşük olmalı.</small>
+              </div>
+              <div className="col-md-4 mb-3">
+                <label className="form-label">İndirim Başlangıcı</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  name="specialPriceStart"
+                  value={formData.specialPriceStart || ""}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="col-md-4 mb-3">
+                <label className="form-label">İndirim Bitişi</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  name="specialPriceEnd"
+                  value={formData.specialPriceEnd || ""}
+                  onChange={handleInputChange}
+                />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Stok Miktarı</label>
+                <label className="form-label">Stok Adedi</label>
                 <input
                   type="number"
                   className="form-control"
@@ -338,24 +412,55 @@ export default function EditProductPage() {
                 </select>
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Kategoriler</label>
+                <label className="form-label">Ana Kategori</label>
                 <select
                   className="form-select"
-                  name="categoryIds"
-                  multiple
-                  value={formData.categoryIds?.map(String) ?? []}
+                  name="mainCategoryId"
+                  value={selectedMainCategoryId ?? ""}
                   onChange={handleInputChange}
-                  size={5}
                 >
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                  <option value="">Kategori seçin</option>
+                  {categories
+                    .filter((c) => !c.parentId)
+                    .sort((a, b) => {
+                      const orderA = a.displayOrder !== undefined ? a.displayOrder : 0;
+                      const orderB = b.displayOrder !== undefined ? b.displayOrder : 0;
+                      return orderA - orderB;
+                    })
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
                 </select>
-                <small className="form-text text-muted">
-                  Birden fazla kategori için Ctrl/Cmd ile seçin.
-                </small>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Alt Kategori</label>
+                <select
+                  className="form-select"
+                  name="subCategoryId"
+                  value={formData.categoryIds?.[0] ?? ""}
+                  onChange={handleInputChange}
+                >
+                  <option value="">{selectedMainCategoryId ? "Alt kategori seçin (isteğe bağlı)" : "Önce ana kategori seçin"}</option>
+                  {selectedMainCategoryId && (() => {
+                    const subs = categories
+                      .filter((c) => c.parentId === selectedMainCategoryId)
+                      .sort((a, b) => {
+                        const orderA = a.displayOrder !== undefined ? a.displayOrder : 0;
+                        const orderB = b.displayOrder !== undefined ? b.displayOrder : 0;
+                        return orderA - orderB;
+                      });
+                    const mainCat = categories.find((c) => c.id === selectedMainCategoryId);
+                    if (subs.length === 0 && mainCat) {
+                      return <option value={selectedMainCategoryId}>{mainCat.name} (ana kategori)</option>;
+                    }
+                    return subs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>);
+                  })()}
+                </select>
+                {selectedMainCategoryId && categories.filter((c) => c.parentId === selectedMainCategoryId).length === 0 && (
+                  <small className="form-text text-muted">Bu ana kategoride alt kategori yok; ürün ana kategoriye atanır.</small>
+                )}
               </div>
             </div>
           </div>
@@ -391,6 +496,19 @@ export default function EditProductPage() {
                 {productImages.length > 0 && (
                   <small className="text-muted d-block mt-2">{productImages.length} görsel seçildi</small>
                 )}
+              </div>
+              <div className="col-12 mt-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={handleImportProductImages}
+                  disabled={importingImages || isCreateMode}
+                >
+                  {importingImages ? "İçe aktarılıyor..." : "productImages klasöründen içe aktar"}
+                </button>
+                <small className="text-muted d-block mt-1">
+                  productImages/{id}/ içindeki görselleri ürüne ekler. İlk görsel thumbnail olur.
+                </small>
               </div>
             </div>
           </div>
@@ -451,7 +569,7 @@ export default function EditProductPage() {
                     checked={formData.isPublished}
                     onChange={handleInputChange}
                   />
-                  <label className="form-check-label">Yayınla</label>
+                  <label className="form-check-label">Ürün Aktif (Yayınla)</label>
                 </div>
               </div>
               <div className="col-md-6 mb-3">
@@ -463,7 +581,7 @@ export default function EditProductPage() {
                     checked={formData.isFeatured}
                     onChange={handleInputChange}
                   />
-                  <label className="form-check-label">Öne Çıkar</label>
+                  <label className="form-check-label">Vitrin (Öne Çıkar)</label>
                 </div>
               </div>
             </div>

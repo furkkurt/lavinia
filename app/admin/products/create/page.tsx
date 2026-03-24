@@ -149,7 +149,7 @@ export default function CreateProductPage() {
                 />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">SKU</label>
+                <label className="form-label">Stok Kodu (SKU)</label>
                 <input
                   type="text"
                   className="form-control"
@@ -159,7 +159,7 @@ export default function CreateProductPage() {
                 />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">GTIN</label>
+                <label className="form-label">Barkod (GTIN)</label>
                 <input
                   type="text"
                   className="form-control"
@@ -169,17 +169,18 @@ export default function CreateProductPage() {
                 />
               </div>
               <div className="col-12 mb-3">
-                <label className="form-label">Kısa Açıklama</label>
+                <label className="form-label">Ön Yazı (ONYAZI)</label>
                 <textarea
                   className="form-control"
                   name="shortDescription"
                   rows={3}
                   value={formData.shortDescription}
                   onChange={handleInputChange}
+                  placeholder="HTML veya düz metin. Sitede format otomatik algılanır."
                 />
               </div>
               <div className="col-12 mb-3">
-                <label className="form-label">Açıklama</label>
+                <label className="form-label">Açıklama (ACIKLAMA)</label>
                 <textarea
                   className="form-control"
                   name="description"
@@ -210,7 +211,7 @@ export default function CreateProductPage() {
             <div className="row">
               <div className="col-md-4 mb-3">
                 <label className="form-label">
-                  Fiyat <span className="text-danger">*</span>
+                  Satış Fiyatı <span className="text-danger">*</span>
                 </label>
                 <input
                   type="number"
@@ -223,7 +224,7 @@ export default function CreateProductPage() {
                 />
               </div>
               <div className="col-md-4 mb-3">
-                <label className="form-label">Eski Fiyat</label>
+                <label className="form-label">Piyasa Fiyatı</label>
                 <input
                   type="number"
                   step="0.01"
@@ -245,7 +246,7 @@ export default function CreateProductPage() {
                 />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Stok Miktarı</label>
+                <label className="form-label">Stok Adedi</label>
                 <input
                   type="number"
                   className="form-control"
@@ -295,20 +296,24 @@ export default function CreateProductPage() {
                 </select>
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Kategoriler</label>
+                <label className="form-label">Kategoriler (BREADCRUMBKAT)</label>
                 <select
                   className="form-select"
                   name="categoryIds"
                   multiple
                   value={formData.categoryIds?.map(String) || []}
                   onChange={handleInputChange}
-                  size={5}
+                  size={8}
                 >
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
+                  {categories.map((category) => {
+                    const parent = category.parentId ? categories.find((c) => c.id === category.parentId) : null;
+                    const displayLabel = parent ? `${parent.name} › ${category.name}` : category.name;
+                    return (
+                      <option key={category.id} value={category.id}>
+                        {displayLabel}
+                      </option>
+                    );
+                  })}
                 </select>
                 <small className="form-text text-muted">
                   Birden fazla kategori seçmek için Ctrl (Windows) veya Cmd (Mac) tuşuna basılı tutun.
@@ -413,7 +418,7 @@ export default function CreateProductPage() {
                     onChange={handleInputChange}
                   />
                   <label className="form-check-label">
-                    Yayınla
+                    Ürün Aktif (Yayınla)
                   </label>
                 </div>
               </div>
@@ -427,7 +432,7 @@ export default function CreateProductPage() {
                     onChange={handleInputChange}
                   />
                   <label className="form-check-label">
-                    Öne Çıkar
+                    Vitrin (Öne Çıkar)
                   </label>
                 </div>
               </div>

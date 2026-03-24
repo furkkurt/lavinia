@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   FaTshirt, 
   FaShoppingBag,
@@ -13,16 +13,47 @@ import {
   GiDress,
   GiShorts
 } from "react-icons/gi";
-import { register, login, adminLogin, getCurrentUser, logout as apiLogout, isAdmin } from "../lib/api/auth";
+
+const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+  "elbiseler": <GiDress className="mega-menu-icon" />,
+  "üst giyim": <FaTshirt className="mega-menu-icon" />,
+  "alt giyim": <GiShorts className="mega-menu-icon" />,
+  "dış giyim": <FaVest className="mega-menu-icon" />,
+  "aksesuar": <FaShoppingBag className="mega-menu-icon" />,
+};
+function getCategoryIcon(name: string) {
+  return CATEGORY_ICONS[name.toLowerCase().trim()] ?? <FaShoppingBag className="mega-menu-icon" />;
+}
+
+/** Mega menüde "Diğer" ana kategoriyi diğer dörtlüden ayırmak için */
+function normalizeCategoryName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/ı/g, "i")
+    .trim();
+}
+
+function isDigerCategory(cat: { name: string; slug?: string }): boolean {
+  const n = normalizeCategoryName(cat.name);
+  const slug = (cat.slug || "").toLowerCase();
+  return n === "diger" || n === "other" || slug === "diger" || slug === "other";
+}
+import { useRouter } from "next/navigation";
+import { register, login, adminLogin, getCurrentUser, logout as apiLogout, isAdmin, validateToken } from "../lib/api/auth";
 import { getMenuCategories, CategoryMenuItem } from "../lib/api/categories";
 import { getCartCount } from "../lib/api/cart";
 
 export default function Navbar() {
+  const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [showSearchPopup, setShowSearchPopup] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loginForm, setLoginForm] = useState({ email: "", password: "", rememberMe: false });
   const [registerForm, setRegisterForm] = useState({ fullName: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -30,16 +61,34 @@ export default function Navbar() {
   const [cartCount, setCartCount] = useState(0);
   const [userIsAdmin, setUserIsAdmin] = useState(false);
 
+  const { storeMainCategories, digerCategory } = useMemo(() => {
+    const diger = categories.find((c) => isDigerCategory(c));
+    const main = categories.filter((c) => !isDigerCategory(c));
+    return { storeMainCategories: main, digerCategory: diger ?? null };
+  }, [categories]);
+
   useEffect(() => {
     // Check if user is logged in from localStorage
     const loggedIn = localStorage.getItem("isLoggedIn") === "true";
-    setIsLoggedIn(loggedIn);
+    const hasToken = typeof window !== "undefined" && !!localStorage.getItem("authToken");
     
-    // Try to get current user from API
-    if (loggedIn) {
-      checkAuthStatus();
-      getCartCount().then(setCartCount).catch(() => {});
-    }
+    const initAuth = async () => {
+      if (loggedIn || hasToken) {
+        const valid = await validateToken();
+        if (!valid) {
+          setIsLoggedIn(false);
+          setCurrentUser(null);
+          setUserIsAdmin(false);
+          setCartCount(0);
+          getCartCount().then(setCartCount).catch(() => {}); // still fetch guest cart
+          return;
+        }
+        setIsLoggedIn(true);
+        await checkAuthStatus();
+      }
+      getCartCount().then(setCartCount).catch(() => {}); // always fetch cart (guest or logged in)
+    };
+    initAuth();
 
     // Fetch categories for menu
     const fetchCategories = async () => {
@@ -96,12 +145,13 @@ export default function Navbar() {
       const adminResult = await adminLogin({
         username: loginForm.email,
         password: loginForm.password,
+        rememberMe: loginForm.rememberMe,
       });
 
       if (adminResult.success) {
         setIsLoggedIn(true);
         setShowLoginModal(false);
-        setLoginForm({ email: "", password: "" });
+        setLoginForm({ email: "", password: "", rememberMe: false });
         await checkAuthStatus();
         getCartCount().then(setCartCount).catch(() => {});
       } else {
@@ -109,13 +159,14 @@ export default function Navbar() {
         const result = await login({
           email: loginForm.email,
           password: loginForm.password,
+          rememberMe: loginForm.rememberMe,
         });
 
         if (result.success) {
           localStorage.setItem("isLoggedIn", "true");
           setIsLoggedIn(true);
           setShowLoginModal(false);
-          setLoginForm({ email: "", password: "" });
+          setLoginForm({ email: "", password: "", rememberMe: false });
           await checkAuthStatus();
         } else {
           alert(adminResult.error || result.error || "E-posta veya şifre hatalı!");
@@ -139,6 +190,9 @@ export default function Navbar() {
       localStorage.removeItem("authToken");
       setIsLoggedIn(false);
       setCurrentUser(null);
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
     }
   };
 
@@ -179,7 +233,7 @@ export default function Navbar() {
         setFormError(null);
         setShowRegisterModal(false);
         setShowLoginModal(true);
-        setLoginForm({ email: registerForm.email.trim().toLowerCase(), password: "" });
+        setLoginForm({ email: registerForm.email.trim().toLowerCase(), password: "", rememberMe: false });
         setRegisterForm({ fullName: "", email: "", password: "", confirmPassword: "" });
         alert("Kayıt başarılı! Giriş yapabilirsiniz.");
       } else {
@@ -216,7 +270,7 @@ export default function Navbar() {
                 data-bs-toggle="offcanvas"
                 data-bs-target="#offcanvasNavbar"
                 aria-controls="offcanvasNavbar"
-                aria-label="Toggle navigation"
+                aria-label="Menüyü aç/kapat"
               >
                 <span className="navbar-toggler-icon"></span>
               </button>
@@ -249,157 +303,59 @@ export default function Navbar() {
                     >
                       <div className="container-fluid">
                         <div className="container">
-                          <div className="row py-4">
-                          <div className="col-md-2">
-                            <h6 className="mega-menu-title">
-                              <GiDress className="mega-menu-icon" />
-                              Elbiseler
-                            </h6>
-                            <ul className="list-unstyled mt-3">
-                              <li>
-                                <Link href="/products?category=gunluk-elbise" className="mega-menu-link">
-                                  Günlük Elbise
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=abiye" className="mega-menu-link">
-                                  Abiye
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=triko-elbise" className="mega-menu-link">
-                                  Triko Elbise
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=mini-midi-maxi" className="mega-menu-link">
-                                  Mini / Midi / Maxi
-                                </Link>
-                              </li>
-                            </ul>
-                          </div>
-                          <div className="col-md-2">
-                            <h6 className="mega-menu-title">
-                              <FaTshirt className="mega-menu-icon" />
-                              Üst Giyim
-                            </h6>
-                            <ul className="list-unstyled mt-3">
-                              <li>
-                                <Link href="/products?category=bluz" className="mega-menu-link">
-                                  Bluz
-                                </Link>
-                              </li>
-                      <li>
-                                <Link href="/products?category=gomlek" className="mega-menu-link">
-                                  Gömlek
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=tisort" className="mega-menu-link">
-                                  Tişört
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=triko" className="mega-menu-link">
-                                  Triko
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=sweatshirt" className="mega-menu-link">
-                                  Sweatshirt
-                                </Link>
-                              </li>
-                            </ul>
-                          </div>
-                          <div className="col-md-2">
-                            <h6 className="mega-menu-title">
-                              <GiShorts className="mega-menu-icon" />
-                              Alt Giyim
-                            </h6>
-                            <ul className="list-unstyled mt-3">
-                              <li>
-                                <Link href="/products?category=pantolon" className="mega-menu-link">
-                                  Pantolon
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=etek" className="mega-menu-link">
-                                  Etek
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=jean" className="mega-menu-link">
-                                  Jean
-                                </Link>
-                              </li>
-                            </ul>
-                          </div>
-                          <div className="col-md-2">
-                            <h6 className="mega-menu-title">
-                              <FaVest className="mega-menu-icon" />
-                              Dış Giyim
-                            </h6>
-                            <ul className="list-unstyled mt-3">
-                              <li>
-                                <Link href="/products?category=ceket" className="mega-menu-link">
-                                  Ceket
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=kaban" className="mega-menu-link">
-                                  Kaban
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=mont" className="mega-menu-link">
-                                  Mont
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=hırka" className="mega-menu-link">
-                                  Hırka
-                        </Link>
-                      </li>
-                    </ul>
-                          </div>
-                          <div className="col-md-2">
-                            <h6 className="mega-menu-title">
-                              <FaShoppingBag className="mega-menu-icon" />
-                              Aksesuar
-                            </h6>
-                            <ul className="list-unstyled mt-3">
-                              <li>
-                                <Link href="/products?category=canta" className="mega-menu-link">
-                                  Çanta
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=kemer" className="mega-menu-link">
-                                  Kemer
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=sal-atki" className="mega-menu-link">
-                                  Şal & Atkı
-                                </Link>
-                              </li>
-                              <li>
-                                <Link href="/products?category=taki" className="mega-menu-link">
-                                  Takı
-                                </Link>
-                  </li>
-                            </ul>
-                          </div>
-                          <div className="col-md-2">
-                            <div className="mega-menu-featured">
-                              <div className="mega-menu-featured-content">
-                                <Link href="/products" className="mega-menu-featured-btn">
+                          <div className="row py-4 align-items-start">
+                            {categories.length > 0 ? (
+                              <>
+                                {storeMainCategories.map((cat) => (
+                                  <div key={cat.id} className="col-6 col-lg-2 mb-3 mb-lg-0">
+                                    <h6 className="mega-menu-title">
+                                      <Link href={`/urunler?category=${encodeURIComponent(cat.slug)}`} style={{ textDecoration: "none", color: "inherit" }}>
+                                        {getCategoryIcon(cat.name)}
+                                        {cat.name}
+                                      </Link>
+                                    </h6>
+                                    {cat.children && cat.children.length > 0 ? (
+                                      <ul className="list-unstyled mt-3">
+                                        {cat.children.map((child) => (
+                                          <li key={child.id}>
+                                            <Link href={`/urunler?category=${encodeURIComponent(child.slug)}`} className="mega-menu-link">
+                                              {child.name}
+                                            </Link>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : null}
+                                  </div>
+                                ))}
+                                <div className="col-12 col-lg-4 mt-2 mt-lg-0">
+                                  <div className="mega-menu-featured h-100">
+                                    <div className="mega-menu-featured-content d-flex flex-column gap-3">
+                                      {digerCategory ? (
+                                        <Link
+                                          href={`/urunler?category=${encodeURIComponent(digerCategory.slug)}`}
+                                          className="mega-menu-diger-btn"
+                                        >
+                                          {getCategoryIcon(digerCategory.name)}
+                                          <span className="ms-2 flex-grow-1 text-start">{digerCategory.name}</span>
+                                          <FaArrowRight className="ms-2 flex-shrink-0" />
+                                        </Link>
+                                      ) : null}
+                                      <Link href="/urunler" className="mega-menu-featured-btn">
+                                        Tüm Ürünleri Gör
+                                        <FaArrowRight className="ms-2" />
+                                      </Link>
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="col-12">
+                                <Link href="/urunler" className="mega-menu-featured-btn">
                                   Tüm Ürünleri Gör
                                   <FaArrowRight className="ms-2" />
-                    </Link>
+                                </Link>
                               </div>
-                            </div>
-                          </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -420,7 +376,7 @@ export default function Navbar() {
                   <>
                     <li className="d-none d-xl-block">
                       <Link
-                        href="/profile"
+                        href="/profil"
                         className="text-uppercase mx-2"
                         style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", color: "#000" }}
                       >
@@ -430,11 +386,11 @@ export default function Navbar() {
                     {userIsAdmin && (
                       <li className="d-none d-xl-block">
                         <Link
-                          href="/admin"
+                          href="/admin/statistics"
                           className="text-uppercase mx-2"
                           style={{ whiteSpace: "nowrap", fontSize: "0.875rem", textDecoration: "none", color: "var(--bs-primary)" }}
                         >
-                          Admin Panel
+                          Yönetim Paneli
                         </Link>
                       </li>
                     )}
@@ -477,7 +433,7 @@ export default function Navbar() {
                 </li>
                 <li className="d-none d-xl-block">
                   <Link
-                    href="/cart"
+                    href="/sepet"
                     className="text-uppercase mx-2"
                     style={{ whiteSpace: "nowrap", fontSize: "0.875rem" }}
                   >
@@ -492,7 +448,7 @@ export default function Navbar() {
                   </Link>
                 </li>
                 <li className="d-xl-none">
-                  <Link href="/cart" className="mx-1" style={{ position: "relative" }}>
+                  <Link href="/sepet" className="mx-1" style={{ position: "relative" }}>
                     <svg width="20" height="20" viewBox="0 0 24 24">
                       <use xlinkHref="#cart"></use>
                     </svg>
@@ -507,11 +463,16 @@ export default function Navbar() {
                   </Link>
                 </li>
                 <li className="search-box mx-1">
-                  <a href="#search" className="search-button">
+                  <button
+                    type="button"
+                    className="search-button btn btn-link p-0 border-0"
+                    onClick={() => setShowSearchPopup(true)}
+                    aria-label="Ara"
+                  >
                     <svg width="20" height="20" viewBox="0 0 24 24">
                       <use xlinkHref="#search"></use>
                     </svg>
-                  </a>
+                  </button>
                 </li>
               </ul>
             </div>
@@ -549,63 +510,40 @@ export default function Navbar() {
                 </a>
                 <div className="collapse" id="mobileCategories">
                   <ul className="list-unstyled ps-4 mt-2">
-                    <li className="mb-2">
-                      <strong className="text-uppercase small d-flex align-items-center gap-2">
-                        <GiDress /> Elbiseler
-                      </strong>
-                      <ul className="list-unstyled ps-3 mt-1">
-                        <li><Link href="/products?category=gunluk-elbise" className="nav-link small">Günlük Elbise</Link></li>
-                        <li><Link href="/products?category=abiye" className="nav-link small">Abiye</Link></li>
-                        <li><Link href="/products?category=triko-elbise" className="nav-link small">Triko Elbise</Link></li>
-                        <li><Link href="/products?category=mini-midi-maxi" className="nav-link small">Mini / Midi / Maxi</Link></li>
-                      </ul>
-                    </li>
-                    <li className="mb-2">
-                      <strong className="text-uppercase small d-flex align-items-center gap-2">
-                        <FaTshirt /> Üst Giyim
-                      </strong>
-                      <ul className="list-unstyled ps-3 mt-1">
-                        <li><Link href="/products?category=bluz" className="nav-link small">Bluz</Link></li>
-                        <li><Link href="/products?category=gomlek" className="nav-link small">Gömlek</Link></li>
-                        <li><Link href="/products?category=tisort" className="nav-link small">Tişört</Link></li>
-                        <li><Link href="/products?category=triko" className="nav-link small">Triko</Link></li>
-                        <li><Link href="/products?category=sweatshirt" className="nav-link small">Sweatshirt</Link></li>
-                      </ul>
-                    </li>
-                    <li className="mb-2">
-                      <strong className="text-uppercase small d-flex align-items-center gap-2">
-                        <GiShorts /> Alt Giyim
-                      </strong>
-                      <ul className="list-unstyled ps-3 mt-1">
-                        <li><Link href="/products?category=pantolon" className="nav-link small">Pantolon</Link></li>
-                        <li><Link href="/products?category=etek" className="nav-link small">Etek</Link></li>
-                        <li><Link href="/products?category=jean" className="nav-link small">Jean</Link></li>
-                      </ul>
-                    </li>
-                    <li className="mb-2">
-                      <strong className="text-uppercase small d-flex align-items-center gap-2">
-                        <FaVest /> Dış Giyim
-                      </strong>
-                      <ul className="list-unstyled ps-3 mt-1">
-                        <li><Link href="/products?category=ceket" className="nav-link small">Ceket</Link></li>
-                        <li><Link href="/products?category=kaban" className="nav-link small">Kaban</Link></li>
-                        <li><Link href="/products?category=mont" className="nav-link small">Mont</Link></li>
-                        <li><Link href="/products?category=hırka" className="nav-link small">Hırka</Link></li>
-                      </ul>
-                    </li>
-                    <li className="mb-2">
-                      <strong className="text-uppercase small d-flex align-items-center gap-2">
-                        <FaShoppingBag /> Aksesuar
-                      </strong>
-                      <ul className="list-unstyled ps-3 mt-1">
-                        <li><Link href="/products?category=canta" className="nav-link small">Çanta</Link></li>
-                        <li><Link href="/products?category=kemer" className="nav-link small">Kemer</Link></li>
-                        <li><Link href="/products?category=sal-atki" className="nav-link small">Şal & Atkı</Link></li>
-                        <li><Link href="/products?category=taki" className="nav-link small">Takı</Link></li>
-                      </ul>
-                    </li>
-                    <li className="mt-3">
-                      <Link href="/products" className="btn btn-dark btn-sm w-100">
+                    {categories.length > 0 ? (
+                      <>
+                        {storeMainCategories.map((cat) => (
+                          <li key={cat.id} className="mb-2">
+                            <strong className="text-uppercase small d-flex align-items-center gap-2">
+                              {getCategoryIcon(cat.name)} {cat.name}
+                            </strong>
+                            {cat.children && cat.children.length > 0 ? (
+                              <ul className="list-unstyled ps-3 mt-1">
+                                {cat.children.map((child) => (
+                                  <li key={child.id}>
+                                    <Link href={`/urunler?category=${encodeURIComponent(child.slug)}`} className="nav-link small">
+                                      {child.name}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </li>
+                        ))}
+                        {digerCategory ? (
+                          <li className="mb-3">
+                            <Link
+                              href={`/urunler?category=${encodeURIComponent(digerCategory.slug)}`}
+                              className="btn btn-outline-dark btn-sm w-100 text-uppercase fw-semibold"
+                            >
+                              {getCategoryIcon(digerCategory.name)} {digerCategory.name}
+                            </Link>
+                          </li>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <li className="mt-2">
+                      <Link href="/urunler" className="btn btn-dark btn-sm w-100">
                         Tüm Ürünleri Gör
                       </Link>
                     </li>
@@ -613,7 +551,7 @@ export default function Navbar() {
                 </div>
               </li>
               <li className="nav-item">
-                <Link className="nav-link" href="/products">
+                <Link className="nav-link" href="/urunler">
                   TÜM ÜRÜNLER
                 </Link>
               </li>
@@ -625,14 +563,14 @@ export default function Navbar() {
               {isLoggedIn ? (
                 <>
                   <li className="nav-item">
-                    <Link className="nav-link" href="/profile">Hesabım</Link>
+                    <Link className="nav-link" href="/profil">Hesabım</Link>
                   </li>
                   <li className="nav-item">
-                    <Link className="nav-link" href="/cart">Sepetim ({cartCount})</Link>
+                    <Link className="nav-link" href="/sepet">Sepetim ({cartCount})</Link>
                   </li>
                   {userIsAdmin && (
                     <li className="nav-item">
-                      <Link className="nav-link text-primary" href="/admin">Admin Panel</Link>
+                      <Link className="nav-link text-primary" href="/admin/statistics">Yönetim Paneli</Link>
                     </li>
                   )}
                   <li className="nav-item">
@@ -710,7 +648,7 @@ export default function Navbar() {
                   type="button"
                   className="btn-close"
                   onClick={() => setShowLoginModal(false)}
-                  aria-label="Close"
+                  aria-label="Kapat"
                 ></button>
               </div>
               <form onSubmit={handleLogin}>
@@ -741,6 +679,18 @@ export default function Navbar() {
                       required
                     />
                   </div>
+                  <div className="mb-3 form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id="loginRememberMe"
+                      checked={loginForm.rememberMe}
+                      onChange={(e) => setLoginForm({ ...loginForm, rememberMe: e.target.checked })}
+                    />
+                    <label htmlFor="loginRememberMe" className="form-check-label">
+                      Beni hatırla
+                    </label>
+                  </div>
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowLoginModal(false)} disabled={loading}>
@@ -757,6 +707,47 @@ export default function Navbar() {
       )}
 
       {/* Register Modal */}
+      {/* Search Popup */}
+      {showSearchPopup && (
+        <div
+          className="search-popup is-visible"
+          onClick={() => setShowSearchPopup(false)}
+        >
+          <div className="search-popup-container" onClick={(e) => e.stopPropagation()}>
+            <form
+              role="search"
+              className="form-group"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const q = searchQuery.trim();
+                if (q) {
+                  router.push(`/urunler?q=${encodeURIComponent(q)}`);
+                  setShowSearchPopup(false);
+                  setSearchQuery("");
+                }
+              }}
+            >
+              <input
+                type="search"
+                className="form-control border-0 border-bottom rounded-0"
+                placeholder="Arama yapın ve Enter'a basın"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ fontSize: "1.5rem", padding: "0.5rem 0" }}
+              />
+              <button
+                type="button"
+                className="btn-close position-absolute"
+                style={{ top: "50%", right: 0, transform: "translateY(-50%)" }}
+                onClick={() => { setShowSearchPopup(false); setSearchQuery(""); }}
+                aria-label="Kapat"
+              />
+            </form>
+          </div>
+        </div>
+      )}
+
       {showRegisterModal && (
         <div
           className="modal show d-block"
@@ -772,7 +763,7 @@ export default function Navbar() {
                   type="button"
                   className="btn-close"
                   onClick={() => setShowRegisterModal(false)}
-                  aria-label="Close"
+                  aria-label="Kapat"
                 ></button>
               </div>
               <form onSubmit={handleRegister}>

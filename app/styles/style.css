@@ -3036,3 +3036,561 @@ a.btn-link.text-light:after {
     margin-top: 1rem !important;
   }
 }
+
+/* ========================================
+   Homepage UX & Mobile Responsive Tweaks
+   ======================================== */
+
+/* Müşteri yorumları — üst widget noktaları ile gri kutu arası boşluk + kompakt yükseklik */
+section.testimonials.section-spacing.bg-light {
+  margin-top: 1.5rem;
+  padding-top: 1rem !important;
+  padding-bottom: 1.5rem !important;
+}
+
+@media (min-width: 768px) {
+  section.testimonials.section-spacing.bg-light {
+    margin-top: 2rem;
+    padding-top: 1.25rem !important;
+    padding-bottom: 1.75rem !important;
+  }
+}
+
+/* Global section { padding: 2rem } (max-width 991) üzerine */
+@media only screen and (max-width: 991px) {
+  section.testimonials.section-spacing.bg-light {
+    margin-top: 1.5rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1.25rem !important;
+  }
+}
+
+.testimonials .testimonials-section-header {
+  max-width: 100%;
+}
+
+.testimonials .testimonials-main-title.section-title {
+  font-size: clamp(1.35rem, 5.5vw, 2.35rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.22em !important;
+  line-height: 1.15 !important;
+  margin-bottom: 0 !important;
+  padding-inline: 0.25rem;
+}
+
+@media (min-width: 768px) {
+  .testimonials .testimonials-main-title.section-title {
+    letter-spacing: 0.28em !important;
+    font-size: clamp(1.6rem, 3.2vw, 2.5rem) !important;
+  }
+}
+
+/* Başlık ile yıldızlı yorum arası — sıkı */
+.testimonials .testimonials-swiper-body.testimonial-swiper {
+  margin-top: 0.65rem !important;
+  padding-top: 0.5rem !important;
+}
+
+@media (min-width: 768px) {
+  .testimonials .testimonials-swiper-body.testimonial-swiper {
+    margin-top: 0.85rem !important;
+    padding-top: 0.65rem !important;
+  }
+}
+
+/* Yeni Gelenler — navbar altında üst boşluk */
+#yeni-gelenler.product-carousel {
+  padding-top: 1.75rem;
+}
+
+@media (min-width: 768px) {
+  #yeni-gelenler.product-carousel {
+    padding-top: 2.5rem;
+  }
+}
+
+/* Hero / banner section spacing */
+.section-title {
+  letter-spacing: 0.05em;
+}
+
+/* Category cards: tighter look on tablet/mobile */
+.collection .column-container {
+  margin-bottom: 1.5rem;
+}
+
+.collection .collection-content {
+  padding: 1.25rem 1rem;
+}
+
+.collection .collection-content .btn {
+  font-size: 0.85rem;
+  padding: 0.5rem 1.25rem;
+}
+
+/* Anasayfa kategoriler: mobilde 2 sütun + daha kısa görsel oranı; md+ 9/16 */
+.home-categories .home-category-image-wrap {
+  aspect-ratio: 4 / 5;
+}
+
+@media (min-width: 768px) {
+  .home-categories .home-category-image-wrap {
+    aspect-ratio: 9 / 16;
+  }
+}
+
+/* Başlık satırı: dekor metin + erişilebilir h2 */
+.collection-heading-row {
+  padding-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.home-categories .home-categories-title-bg.title-xlarge {
+  font-size: clamp(2rem, 12vw, 4.5rem);
+  top: 0;
+  left: 0;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-categories .collection-heading-row .section-title {
+  z-index: 1;
+}
+
+@media (min-width: 768px) {
+  .home-categories .home-categories-title-bg.title-xlarge {
+    font-size: clamp(2.5rem, 8vw, 5.5rem);
+    top: -0.25rem;
+  }
+}
+
+/* Ürün listesi — mobil: uzun başlıklar, dokunmatik sıralama */
+.products-page .products-grid-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.5em;
+  line-height: 1.25;
+  font-size: clamp(0.7rem, 3.2vw, 1.1rem);
+}
+
+.products-page .products-grid-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.products-page .products-page-sort-select {
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+}
+
+@media (min-width: 576px) {
+  .products-page .products-page-sort-select {
+    max-width: 280px;
+    width: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .product-carousel .product-carousel-view-all {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Global @media (max-width: 991px) .collection-item { flex-direction: column } anasayfa grid’ini bozmasın */
+@media only screen and (max-width: 991px) {
+  .home-categories .collection-item.row {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+  }
+
+  .home-categories .collection-content {
+    padding: 0.65rem 0.45rem !important;
+  }
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .home-categories .collection-content {
+    padding: 1rem !important;
+  }
+}
+
+/* Mobil/tablet genel .title-xlarge !important üzerine */
+@media only screen and (max-width: 991px) {
+  .home-categories .home-categories-title-bg.title-xlarge {
+    font-size: clamp(2rem, 11vw, 3.75rem) !important;
+  }
+}
+
+/* Testimonials: wider cards, proper mobile spacing */
+.testimonial-swiper {
+  padding: 0 1rem;
+}
+
+.testimonial-item blockquote {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.testimonial-item .review-title {
+  margin-top: 1rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+/* Newsletter: centered with subtle styling */
+.newsletter form {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* Prevent horizontal overflow on all screen sizes */
+html, body {
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+.container, .container-fluid {
+  overflow-x: clip;
+}
+
+/* Hero section: proper spacing after navbar */
+.navbar + section,
+.navbar + .container {
+  margin-top: 0;
+}
+
+/* Category card hover lift effect */
+.collection .column-container .image-holder {
+  overflow: hidden;
+  border-radius: 4px 4px 0 0;
+}
+
+.collection .column-container .image-holder img {
+  transition: transform 0.5s ease;
+}
+
+.collection .column-container:hover .image-holder img {
+  transform: scale(1.05);
+}
+
+/* home-categories: rounded-1 ile uyum (üst köşe radius) */
+.home-categories .column-container .image-holder {
+  border-radius: 0.25rem 0.25rem 0 0;
+}
+
+/* Better button hover states */
+.btn-dark:hover {
+  background-color: #000 !important;
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+/* Product card subtle shadow on hover */
+.product-item {
+  transition: box-shadow 0.3s ease;
+}
+
+.product-item:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+/* Instagram section overlay button */
+.instagram-button-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+
+.instagram-follow-btn {
+  font-size: 0.9rem;
+  padding: 0.75rem 2rem;
+  letter-spacing: 0.05em;
+}
+
+/* --- Tablet 768-991px --- */
+@media (min-width: 768px) and (max-width: 991px) {
+  /* Anasayfa kategoriler Bootstrap col-md-3 kullanır; zorla 2 sütun yapma */
+  .collection:not(.home-categories) .column-container {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+
+  .testimonial-swiper .swiper-slide {
+    width: 70% !important;
+  }
+}
+
+/* --- Mobile < 768px --- */
+@media (max-width: 767px) {
+  /* Category cards full-width on mobile (home-categories hariç: 2 sütun col-6) */
+  .collection:not(.home-categories) .column-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+    margin-bottom: 1.5rem;
+  }
+
+  .home-categories .column-container {
+    margin-bottom: 0.75rem;
+  }
+
+  .collection .collection-content h3 {
+    font-size: 1.15rem !important;
+  }
+
+  .collection .collection-content .btn {
+    font-size: 0.8rem !important;
+    padding: 0.4rem 1rem !important;
+  }
+
+  .home-categories .collection-content h3 {
+    font-size: 1rem !important;
+  }
+
+  .home-categories .collection-content .btn {
+    font-size: 0.75rem !important;
+    padding: 0.35rem 0.65rem !important;
+  }
+
+  /* Testimonials mobile */
+  .testimonial-item blockquote {
+    padding: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .testimonial-item .review-title {
+    font-size: 0.75rem !important;
+  }
+
+  /* Newsletter mobile */
+  .newsletter .section-title {
+    font-size: 1.15rem !important;
+  }
+
+  .newsletter form {
+    flex-direction: column !important;
+  }
+
+  .newsletter input {
+    font-size: 0.9rem !important;
+  }
+
+  .newsletter button {
+    margin-top: 0.5rem;
+  }
+
+  /* Instagram grid mobile */
+  .instagram .insta-item {
+    height: 160px !important;
+  }
+
+  .instagram-follow-btn {
+    font-size: 0.75rem !important;
+    padding: 0.5rem 1rem !important;
+  }
+
+  /* Section titles mobile */
+  .section-title {
+    font-size: 1.25rem !important;
+  }
+
+  .section-header {
+    margin-bottom: 1rem !important;
+  }
+
+  /* Product carousel titles mobile */
+  .product-carousel .section-header h4,
+  .product-carousel .section-header .section-title {
+    font-size: 1.1rem !important;
+  }
+}
+
+/* --- Mobile < 480px (very small) --- */
+@media (max-width: 480px) {
+  .collection:not(.home-categories) .collection-content {
+    padding: 0.75rem !important;
+  }
+
+  .home-categories .collection-content {
+    padding: 0.5rem 0.4rem !important;
+  }
+
+  .collection .collection-content h3 {
+    font-size: 1rem !important;
+  }
+
+  .testimonial-item blockquote p {
+    font-size: 0.85rem !important;
+  }
+
+  .instagram .insta-item {
+    height: 120px !important;
+  }
+}
+
+/* Product detail slider navigation arrows */
+.product-large-slider .swiper-button-prev,
+.product-large-slider .swiper-button-next {
+  color: #000;
+  background: rgba(255,255,255,0.85);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+.product-large-slider .swiper-button-prev:hover,
+.product-large-slider .swiper-button-next:hover {
+  background: rgba(255,255,255,1);
+}
+.product-large-slider .swiper-button-prev::after,
+.product-large-slider .swiper-button-next::after {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Low stock badge on product cards */
+.stock-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #dc3545;
+  color: #fff;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  z-index: 2;
+  text-transform: uppercase;
+}
+
+/* Discount badge on product cards */
+.discount-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #198754;
+  color: #fff;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  z-index: 2;
+}
+
+/* Sold out: listings + carousels */
+.out-of-stock-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(33, 37, 41, 0.92);
+  color: #fff;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  z-index: 3;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.out-of-stock-thumb {
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.out-of-stock-overlay {
+  opacity: 0.45;
+  filter: grayscale(85%);
+}
+
+/* Footer mobile: social icons centered, columns stacked */
+@media (max-width: 767px) {
+  #footer .footer-brand-col {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  #footer .social-links ul {
+    justify-content: center !important;
+  }
+
+  #footer .footer-menu-col {
+    margin-bottom: 1rem;
+  }
+
+  #footer .footer-bottom {
+    text-align: center;
+  }
+
+  #footer .footer-copyright {
+    font-size: 0.8rem !important;
+  }
+}
+
+/* Products page mobile: tighter grid */
+@media (max-width: 575px) {
+  .products-page .col-6 {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  .products-page .product-content h5 {
+    font-size: 0.8rem !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .products-page .product-content span,
+  .products-page .product-content a {
+    font-size: 0.85rem !important;
+  }
+}
+
+/* Smooth page transitions */
+main, section {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0.85; }
+  to { opacity: 1; }
+}
+
+/* Carousel arrow disabled state */
+.carousel-arrow:disabled {
+  opacity: 0.3 !important;
+  cursor: default !important;
+}
+
+/* Product card image hover zoom */
+.image-zoom-effect .image-holder {
+  overflow: hidden;
+}
+
+.image-zoom-effect .image-holder img {
+  transition: transform 0.4s ease;
+}
+
+.image-zoom-effect:hover .image-holder img {
+  transform: scale(1.05);
+}
+
+/* Design tweak: Widget hover "Sepete Ekle" text centered */
+.product-content .link-effect a[data-after]::after {
+  left: 50%;
+  transform: translate(-50%, 100%);
+  width: 100%;
+  text-align: center;
+}
+.product-content .link-effect:hover a[data-after]::after {
+  transform: translate(-50%, 0%);
+}

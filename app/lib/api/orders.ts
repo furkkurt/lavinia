@@ -129,7 +129,59 @@ export async function getOrderStatuses(): Promise<OrderStatusOption[]> {
   return response.data || [];
 }
 
+export interface OrderStatistics {
+  totalRevenue: number;
+  totalOrders: number;
+  thisMonthRevenue: number;
+  thisWeekRevenue: number;
+  avgOrderValue: number;
+  statusCounts: { status: string; count: number }[];
+  topProducts: { productId: number; name: string; totalQuantity: number; totalRevenue: number }[];
+  monthlyRevenue: { year: number; month: number; revenue: number; orderCount: number }[];
+}
+
+export async function getOrderStatistics(months?: number | null): Promise<OrderStatistics | null> {
+  const q =
+    months != null && months > 0 ? `?months=${encodeURIComponent(String(months))}` : "";
+  const response = await apiFetch<OrderStatistics>(`/api/orders/statistics${q}`);
+  if (response.error) return null;
+  return response.data || null;
+}
+
 export function getInvoiceUrl(orderId: number): string {
   const token = getAuthToken();
   return `${API_BASE_URL}/api/invoices/print/${orderId}?access_token=${token}`;
+}
+
+/** Fetch invoice with Bearer token and open in new tab */
+export async function downloadInvoicePdf(orderId: number): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    alert('Fatura indirmek için giriş yapmanız gerekiyor.');
+    return;
+  }
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/invoices/print/${orderId}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        alert('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
+      } else {
+        alert(`Fatura indirilemedi: ${response.status}`);
+      }
+      return;
+    }
+    const contentType = response.headers.get('content-type') || '';
+    const blob = await response.blob();
+    const blobType = contentType.includes('text/html') ? 'text/html' : 'application/pdf';
+    const url = URL.createObjectURL(new Blob([blob], { type: blobType }));
+    const w = window.open(url, '_blank');
+    if (w) w.focus();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (err) {
+    console.error('Invoice download error:', err);
+    alert('Fatura indirilemedi.');
+  }
 }

@@ -1,5 +1,34 @@
-// API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+/**
+ * API kök URL’i.
+ * - Üretimde birçok sunucuda 5000 portu dışarı kapalıdır; tarayıcı `hostname:5000` ile ERR_CONNECTION_REFUSED verir.
+ * - Çözüm: `lavinia/.env.production` içinde `NEXT_PUBLIC_API_BASE_URL` tanımlayın veya 80/443 önünde nginx ile `/api` proxy kullanın.
+ */
+function resolveApiBaseUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_API_BASE_URL;
+  // Tanımlı ve boş string = bilinçli "aynı origin" (nginx /api proxy)
+  if (explicit !== undefined) {
+    if (explicit === "") return "";
+    return explicit.replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined") {
+    const { hostname, port } = window.location;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "http://localhost:5000";
+    }
+
+    // Doğrudan Next (PM2) :3000 — API genelde Docker’da :5000 (firewall açık olmalı)
+    if (port === "3000") {
+      return `http://${hostname}:5000`;
+    }
+
+    // 80 / 443 / boş port → aynı origin; nginx/Caddy’nin /api, /user-content, /product-images proxy etmesi gerekir
+    return "";
+  }
+
+  return "http://localhost:5000";
+}
+export const API_BASE_URL = resolveApiBaseUrl();
 
 // Helper function to get full image URL from backend
 export function getImageUrl(imagePath: string | undefined | null): string {

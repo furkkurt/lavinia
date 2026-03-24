@@ -6,10 +6,10 @@ The frontend must know your backend API URL. **Set this before building:**
 
 ```bash
 # Create .env.production with your API base URL
-echo "NEXT_PUBLIC_API_BASE_URL=http://23.95.193.212:5000" > .env.production
+echo "NEXT_PUBLIC_API_BASE_URL=http://31.210.43.159:5000" > .env.production
 ```
 
-Replace `http://23.95.193.212:5000` with your actual backend API URL if different.
+Replace `http://31.210.43.159:5000` with your actual backend API URL if different.
 
 ## 2. Build and Run with PM2
 

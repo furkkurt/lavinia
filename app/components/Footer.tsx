@@ -18,16 +18,21 @@ export default function Footer() {
                 </Link>
               </div>
               <p className="footer-description" style={{ marginBottom: "0.75rem", lineHeight: "1.6" }}>
-                Gravida massa volutpat aenean odio. Amet, turpis erat nullam fringilla elementum
-                diam in. Nisi, purus vitae, ultrices nunc. Sit ac sit suscipit hendrerit.
+                Kadın giyiminde zarafet ve kaliteyi bir arada sunuyoruz. Yeni sezon koleksiyonlarımızla tarzınıza değer katıyoruz.
               </p>
               <div className="social-links">
                 <ul className="list-unstyled d-flex flex-wrap gap-3 mb-0">
-                  {["facebook", "twitter", "youtube", "pinterest", "instagram"].map((social) => (
-                    <li key={social}>
-                      <a href="#" className="text-secondary">
+                  {[
+                    { name: "instagram", url: "https://www.instagram.com/boutiquelavinia_/" },
+                    { name: "facebook", url: "#" },
+                    { name: "twitter", url: "#" },
+                    { name: "youtube", url: "#" },
+                    { name: "pinterest", url: "#" },
+                  ].map((social) => (
+                    <li key={social.name}>
+                      <a href={social.url} className="text-secondary" target={social.url !== "#" ? "_blank" : undefined} rel={social.url !== "#" ? "noopener noreferrer" : undefined}>
                         <svg width="24" height="24" viewBox="0 0 24 24">
-                          <use xlinkHref={`#${social}`}></use>
+                          <use xlinkHref={`#${social.name}`}></use>
                         </svg>
                       </a>
                     </li>
@@ -46,7 +51,7 @@ export default function Footer() {
               <ul className="menu-list list-unstyled text-uppercase border-animation-left fs-6" style={{ lineHeight: "1.8" }}>
                 {["Ana Sayfa", "Hakkımızda", "Hizmetler", "Ürünler", "İletişim"].map((link) => (
                   <li key={link} className="menu-item" style={{ marginBottom: "0.25rem" }}>
-                    <Link href={link === "Ürünler" ? "/products" : "/"} className="item-anchor">
+                    <Link href={link === "Ürünler" ? "/urunler" : "/"} className="item-anchor">
                       {link}
                     </Link>
                   </li>
@@ -124,7 +129,7 @@ export default function Footer() {
             </div>
             <div className="col-md-6 col-12 text-center text-md-end">
               <p className="footer-copyright" style={{ margin: 0, fontSize: "0.875rem" }}>
-                © Copyright 2024 Boutique Lavinia. Tüm hakları saklıdır.
+                © Copyright 2026 Boutique Lavinia. Tüm hakları saklıdır.
               </p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchMultipart } from './config';
+import { apiFetch, apiFetchMultipart, API_BASE_URL } from './config';
 
 export interface Product {
   id: number;
@@ -12,6 +12,7 @@ export interface Product {
   metaDescription?: string;
   sku?: string;
   gtin?: string;
+  category?: string | null;
   price: number;
   oldPrice?: number;
   specialPrice?: number;
@@ -21,6 +22,7 @@ export interface Product {
   isFeatured?: boolean;
   isCallForPricing?: boolean;
   stockQuantity?: number;
+  stockTrackingIsEnabled?: boolean;
   thumbnailImageUrl?: string;
   thumbnailImage?: File;
   brandId?: number;
@@ -35,6 +37,7 @@ export interface Product {
 export interface ProductGridParams {
   pageIndex?: number;
   pageSize?: number;
+  categorySlug?: string;
   sort?: Array<{
     field: string;
     dir: 'asc' | 'desc';
@@ -68,6 +71,14 @@ export async function getProductsGrid(params: ProductGridParams): Promise<Produc
     reverse: true
   };
 
+  const predicateObject: any = {};
+  if (params.categorySlug) {
+    predicateObject.categorySlug = params.categorySlug;
+  }
+  if (params.filter && params.filter.filters && params.filter.filters.length > 0) {
+    predicateObject.filter = params.filter;
+  }
+
   const requestBody: any = {
     pagination: {
       start: pageIndex * pageSize,
@@ -75,25 +86,14 @@ export async function getProductsGrid(params: ProductGridParams): Promise<Produc
     },
     sort: sortObj,
     search: {
-      predicateObject: {}
+      predicateObject
     }
   };
-
-  // Add filters if provided
-  if (params.filter && params.filter.filters && params.filter.filters.length > 0) {
-    requestBody.search.predicateObject.filter = params.filter;
-  }
 
   const response = await apiFetch<ProductGridResponse>('/api/public/products/grid', {
     method: 'POST',
     body: JSON.stringify(requestBody),
   });
-
-  // DEBUG: ana sayfa ürün sorunu
-  if (typeof window !== 'undefined') {
-    const r = response.data as ProductGridResponse | undefined;
-    console.log('[getProductsGrid] status:', response.status, 'error:', response.error, 'data length:', r?.data?.length ?? 'n/a', 'total:', r?.total ?? 'n/a');
-  }
 
   if (response.error) {
     if (response.status !== 401 && response.status !== 404) {
@@ -102,6 +102,32 @@ export async function getProductsGrid(params: ProductGridParams): Promise<Produc
     return null;
   }
 
+  return response.data || null;
+}
+
+/** En çok satanlar: sipariş adedine göre sıralı grid (Orders modülü) */
+export async function getBestsellersGrid(params: { pageIndex?: number; pageSize?: number; categorySlug?: string } = {}): Promise<ProductGridResponse | null> {
+  const pageIndex = params.pageIndex ?? 0;
+  const pageSize = params.pageSize ?? 20;
+  const predicateObject: Record<string, string> = {};
+  if (params.categorySlug) {
+    predicateObject.categorySlug = params.categorySlug;
+  }
+  const requestBody = {
+    pagination: { start: pageIndex * pageSize, number: pageSize },
+    sort: { predicate: "id", reverse: true },
+    search: { predicateObject },
+  };
+  const response = await apiFetch<ProductGridResponse>("/api/public/bestsellers/grid", {
+    method: "POST",
+    body: JSON.stringify(requestBody),
+  });
+  if (response.error) {
+    if (response.status !== 401 && response.status !== 404) {
+      console.error("Error fetching bestsellers:", response.error);
+    }
+    return null;
+  }
   return response.data || null;
 }
 
@@ -118,6 +144,18 @@ export async function getProduct(id: number): Promise<Product | null> {
   }
 
   return response.data || null;
+}
+
+// Get image filenames from productImages/{id}/ folder (fallback when product has no media)
+export async function getProductLocalImages(productId: number): Promise<string[]> {
+  const response = await apiFetch<{ files: string[] }>(`/api/public/products/${productId}/local-images`);
+  if (response.error || !response.data?.files) return [];
+  return response.data.files;
+}
+
+// Build full URL for a local product image
+export function getProductLocalImageUrl(productId: number, filename: string): string {
+  return `${API_BASE_URL}/product-images/${productId}/${encodeURIComponent(filename)}`;
 }
 
 // Create product
@@ -142,6 +180,7 @@ export async function createProduct(product: Partial<Product>): Promise<Product 
   if (product.isFeatured !== undefined) formData.append('Product.IsFeatured', product.isFeatured.toString());
   if (product.isCallForPricing !== undefined) formData.append('Product.IsCallForPricing', product.isCallForPricing.toString());
   if (product.stockQuantity !== undefined) formData.append('Product.StockQuantity', product.stockQuantity.toString());
+  formData.append('Product.StockTrackingIsEnabled', 'true');
   if (product.brandId) formData.append('Product.BrandId', product.brandId.toString());
   if (product.categoryIds && product.categoryIds.length > 0) {
     product.categoryIds.forEach((catId) => {
@@ -198,6 +237,7 @@ export async function updateProduct(id: number, product: Partial<Product>): Prom
   if (product.isFeatured !== undefined) formData.append('Product.IsFeatured', product.isFeatured.toString());
   if (product.isCallForPricing !== undefined) formData.append('Product.IsCallForPricing', product.isCallForPricing.toString());
   if (product.stockQuantity !== undefined) formData.append('Product.StockQuantity', product.stockQuantity.toString());
+  formData.append('Product.StockTrackingIsEnabled', 'true');
   if (product.brandId !== undefined) formData.append('Product.BrandId', product.brandId.toString());
   if (product.categoryIds && product.categoryIds.length > 0) {
     product.categoryIds.forEach((catId) => formData.append('Product.CategoryIds', catId.toString()));

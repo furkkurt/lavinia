@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { getAdminOrder, changeOrderStatus, getInvoiceUrl, OrderDetail } from "../../../lib/api/orders";
+import { getAdminOrder, changeOrderStatus, downloadInvoicePdf } from "../../../lib/api/orders";
 import { getImageUrl } from "../../../lib/api/config";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -120,9 +120,9 @@ export default function AdminOrderDetailPage() {
           <span className="badge" style={{ background: statusInfo.color, borderRadius: "4px", padding: "8px 16px", fontSize: "14px" }}>
             {statusInfo.label}
           </span>
-          <a href={getInvoiceUrl(order.id)} target="_blank" rel="noopener noreferrer" className="btn btn-outline-dark">
+          <button type="button" onClick={() => downloadInvoicePdf(order.id)} className="btn btn-outline-dark">
             Fatura İndir
-          </a>
+          </button>
         </div>
       </div>
 

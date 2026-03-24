@@ -1,5 +1,4 @@
 import { apiFetch } from './config';
-//deneme
 export interface UserAddress {
   id: number;
   addressId: number;

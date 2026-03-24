@@ -6,32 +6,37 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname),
   async redirects() {
     return [
-      { source: "/woman", destination: "/products?category=woman", permanent: false },
-      { source: "/man", destination: "/products?category=man", permanent: false },
+      { source: "/woman", destination: "/urunler", permanent: false },
+      { source: "/products", destination: "/urunler", permanent: true },
+      { source: "/products/:path*", destination: "/urunler/:path*", permanent: true },
+      { source: "/cart", destination: "/sepet", permanent: true },
+      { source: "/checkout", destination: "/odeme", permanent: true },
+      { source: "/profile", destination: "/profil", permanent: true },
     ];
   },
   images: {
     remotePatterns: [
       {
         protocol: 'http',
-        hostname: '23.95.193.212',
-        port: '5000',
-        pathname: '/user-content/**',
-      },
-      {
-        protocol: 'https',
-        hostname: '23.95.193.212',
-        port: '5000',
+        hostname: '**',
         pathname: '/user-content/**',
       },
       {
         protocol: 'http',
-        hostname: 'localhost',
-        port: '5000',
+        hostname: '**',
+        pathname: '/product-images/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**',
         pathname: '/user-content/**',
       },
+      {
+        protocol: 'https',
+        hostname: '**',
+        pathname: '/product-images/**',
+      },
     ],
-    unoptimized: true, // Disable image optimization for external images
   },
 };
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { adminLogin } from "../lib/api/auth";
+import { adminLogin, isAdmin, validateToken } from "../lib/api/auth";
 
 export default function AdminLayout({
   children,
@@ -17,16 +17,28 @@ export default function AdminLayout({
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [mounted, setMounted] = useState(false);
   
-  // Check auth on mount only
   useEffect(() => {
     setMounted(true);
-    setIsLoggedIn(localStorage.getItem("isLoggedIn") === "true");
+    const hasLocal = localStorage.getItem("isLoggedIn") === "true";
+    if (hasLocal && isAdmin()) {
+      validateToken().then((valid) => {
+        setIsLoggedIn(valid && isAdmin());
+        if (!valid || !isAdmin()) {
+          localStorage.removeItem("isLoggedIn");
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("adminUser");
+        }
+      });
+    } else {
+      setIsLoggedIn(false);
+    }
   }, []);
   
   const [showLoginForm] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +55,7 @@ export default function AdminLayout({
         localStorage.setItem("isLoggedIn", "true");
         setIsLoggedIn(true);
         setLoginForm({ username: "", password: "" });
+        router.replace("/admin/statistics");
       } else {
         setLoginError(result.error || "Giriş başarısız.");
       }
@@ -57,7 +70,7 @@ export default function AdminLayout({
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("authToken");
     setIsLoggedIn(false);
-    router.push("/admin");
+        router.push("/admin");
   };
 
   // Show loading state during hydration to prevent skipping
@@ -129,26 +142,39 @@ export default function AdminLayout({
   }
 
   const menuItems = [
-    { href: "/admin", label: "Dashboard", icon: "📊" },
-    { href: "/admin/orders", label: "Siparişler", icon: "📦" },
-    { href: "/admin/products", label: "Ürünler", icon: "🛍️" },
-    { href: "/admin/users", label: "Kullanıcılar", icon: "👥" },
+    { href: "/admin/statistics", label: "İstatistikler" },
+    { href: "/admin/orders", label: "Siparişler" },
+    { href: "/admin/products", label: "Ürünler" },
+    { href: "/admin/categories", label: "Kategoriler" },
+    { href: "/admin/reviews", label: "Değerlendirmeler" },
+    { href: "/admin/users", label: "Kullanıcılar" },
+    { href: "/admin/dev", label: "Dev" },
   ];
 
   return (
     <div className="admin-layout d-flex" style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
       <aside
-        className="bg-dark text-white"
+        className="bg-dark text-white position-relative"
         style={{
-          width: "250px",
+          width: sidebarCollapsed ? "60px" : "250px",
           minHeight: "100vh",
           padding: "1.5rem 0",
+          transition: "width 0.2s ease",
         }}
       >
-        <div className="px-3 mb-4">
-          <Link href="/admin" className="text-white text-decoration-none">
-            <h4 className="mb-0">Admin Panel</h4>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-light position-absolute"
+          style={{ top: 8, right: 8 }}
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title={sidebarCollapsed ? "Sidebar'ı aç" : "Sidebar'ı kapat"}
+        >
+          {sidebarCollapsed ? "→" : "←"}
+        </button>
+        <div className="px-3 mb-4" style={{ paddingRight: 36 }}>
+          <Link href="/admin/statistics" className="text-white text-decoration-none">
+            <h4 className="mb-0">{sidebarCollapsed ? "Y" : "Yönetim Paneli"}</h4>
           </Link>
         </div>
         <nav>
@@ -162,9 +188,9 @@ export default function AdminLayout({
               style={{
                 transition: "background-color 0.2s",
               }}
+              title={sidebarCollapsed ? item.label : undefined}
             >
-              <span className="me-2">{item.icon}</span>
-              {item.label}
+              {!sidebarCollapsed && item.label}
             </Link>
           ))}
         </nav>
@@ -172,15 +198,16 @@ export default function AdminLayout({
           <Link
             href="/"
             className="d-block px-3 py-2 text-white text-decoration-none"
+            title={sidebarCollapsed ? "Ana Sayfa" : undefined}
           >
-            <span className="me-2">🏠</span>
-            Ana Sayfa
+            {!sidebarCollapsed && "Ana Sayfa"}
           </Link>
           <button
             onClick={handleLogout}
             className="btn btn-outline-light w-100 mt-2"
+            title={sidebarCollapsed ? "Çıkış Yap" : undefined}
           >
-            Çıkış Yap
+            {sidebarCollapsed ? "✕" : "Çıkış Yap"}
           </button>
         </div>
       </aside>

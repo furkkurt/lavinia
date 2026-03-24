@@ -40,9 +40,6 @@ export function dispatchCartUpdate() {
 }
 
 export async function getCart(): Promise<CartResult> {
-  if (!getAuthToken()) {
-    return { cart: null, requiresAuth: true };
-  }
   const response = await apiFetch<Cart>('/api/cart');
   if (response.status === 401) {
     return { cart: null, requiresAuth: true };
@@ -54,16 +51,11 @@ export async function getCart(): Promise<CartResult> {
 }
 
 export async function getCartCount(): Promise<number> {
-  if (!getAuthToken()) return 0;
   const response = await apiFetch<{ count: number }>('/api/cart/count');
   return response.data?.count || 0;
 }
 
 export async function addToCart(productId: number, quantity: number = 1): Promise<{ success: boolean; cartItemCount?: number; error?: string; requiresAuth?: boolean }> {
-  if (!getAuthToken()) {
-    return { success: false, requiresAuth: true, error: 'Sepete ürün eklemek için giriş yapmalısınız.' };
-  }
-
   const response = await apiFetch<{ success: boolean; cartItemCount: number }>('/api/cart/add-item', {
     method: 'POST',
     body: JSON.stringify({ productId, quantity }),

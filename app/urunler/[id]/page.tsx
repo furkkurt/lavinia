@@ -2,17 +2,18 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import SvgSprite from "../../components/SvgSprite";
 import SwiperInit from "../../components/SwiperInit";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import ProductCarousel from "../../components/ProductCarousel";
+import ShortDescription from "../../components/ShortDescription";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getProduct, getProductsGrid, Product } from "../../lib/api/products";
+import { getProduct, getProductsGrid, getProductLocalImages, getProductLocalImageUrl, Product } from "../../lib/api/products";
 import { getImageUrl } from "../../lib/api/config";
 import { addToCart } from "../../lib/api/cart";
+import { getProductReviews, ProductReviewsResponse } from "../../lib/api/reviews";
 
 declare global {
   namespace JSX {
@@ -26,19 +27,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const { id } = React.use(params);
   const productId = parseInt(id, 10);
   const [product, setProduct] = useState<Product | null>(null);
+  const [localImageUrls, setLocalImageUrls] = useState<Array<{ imageUrl: string }>>([]);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [reviews, setReviews] = useState<ProductReviewsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartMessage, setCartMessage] = useState<string | null>(null);
   const [cartMessageType, setCartMessageType] = useState<'success' | 'error'>('success');
+  const [imagesReady, setImagesReady] = useState(0);
 
   const handleAddToCart = async () => {
     if (!product) return;
     setAddingToCart(true);
     setCartMessage(null);
-    const qtyInput = document.getElementById("quantity") as HTMLInputElement;
-    const qty = qtyInput ? parseInt(qtyInput.value, 10) || 1 : 1;
-    const result = await addToCart(product.id, qty);
+    const result = await addToCart(product.id, quantity);
     if (result.success) {
       setCartMessageType('success');
       setCartMessage("Ürün sepete eklendi!");
@@ -67,6 +70,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         if (!isMounted) return;
 
         setProduct(productData);
+
+        const hasMediaImages = productData?.productImages && (productData.productImages as any[])?.length > 0;
+        if (!hasMediaImages) {
+          const localFiles = await getProductLocalImages(productId);
+          if (localFiles.length > 0) {
+            setLocalImageUrls(localFiles.map((f) => ({ imageUrl: getProductLocalImageUrl(productId, f) })));
+          }
+        }
+        setImagesReady((c) => c + 1);
+
+        // Fetch reviews
+        const reviewsData = await getProductReviews(productId);
+        if (!isMounted) return;
+        if (reviewsData) setReviews(reviewsData);
 
         // Fetch related products
         const relatedRes = await getProductsGrid({
@@ -110,7 +127,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <SvgSprite />
-      <SwiperInit />
+      <SwiperInit reinitKey={imagesReady} />
       
       <div className="preloader text-white fs-6 text-uppercase overflow-hidden"></div>
 
@@ -138,7 +155,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         data-bs-scroll="true"
         tabIndex={-1}
         id="offcanvasCart"
-        aria-labelledby="My Cart"
+        aria-labelledby="Sepet"
       >
         <div className="offcanvas-header justify-content-center">
           <button
@@ -150,7 +167,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="offcanvas-body">
           <div className="order-md-last">
-            <h4 className="d-flex justify-content-between align-items-center mb-3">
+            <h4 id="Sepet" className="d-flex justify-content-between align-items-center mb-3">
               <span className="text-primary">Sepetiniz</span>
               <span className="badge bg-primary rounded-pill">0</span>
             </h4>
@@ -180,7 +197,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         <section className="single-product py-5">
           <div className="container text-center">
             <h2>Ürün bulunamadı</h2>
-            <Link href="/products" className="btn btn-primary mt-3">
+            <Link href="/urunler" className="btn btn-primary mt-3">
               Ürünlere Dön
             </Link>
           </div>
@@ -194,7 +211,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <Link href="/">Ana Sayfa</Link>
                 </li>
                 <li className="breadcrumb-item">
-                  <Link href="/products">Ürünler</Link>
+                  <Link href="/urunler">Ürünler</Link>
                 </li>
                 <li className="breadcrumb-item active" aria-current="page">
                   {product.name}
@@ -205,56 +222,61 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="row">
               <div className="col-md-6 mb-4">
                 <div className="product-preview">
-                  <div className="swiper product-large-slider mb-3">
+                  <div className="swiper product-large-slider mb-3" style={{ position: "relative" }}>
                     <div className="swiper-wrapper">
-                      {product.productImages && product.productImages.length > 0 ? (
-                        product.productImages.map((img, idx) => (
+                      {(() => {
+                        const displayImages = (product.productImages && (product.productImages as any[]).length > 0)
+                          ? (product.productImages as any[]).map((img) => ({ imageUrl: img.originalUrl || img.imageUrl || img.mediaUrl }))
+                          : localImageUrls;
+                        return displayImages.length > 0 ? (
+                        displayImages.map((img, idx) => (
                           <div key={idx} className="swiper-slide">
-                            <Image
+                            <img
                               src={getImageUrl(img.imageUrl || product.thumbnailImageUrl)}
                               alt={`${product.name} - Görsel ${idx + 1}`}
                               className="img-fluid"
-                              width={600}
-                              height={800}
-                              unoptimized
+                              style={{ width: "100%", height: "auto" }}
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
                               }}
                             />
                           </div>
                         ))
-                      ) : (
+                        ) : (
                         <div className="swiper-slide">
-                          <Image
+                          <img
                             src={getImageUrl(product.thumbnailImageUrl)}
                             alt={product.name}
                             className="img-fluid"
-                            width={600}
-                            height={800}
-                            unoptimized
+                            style={{ width: "100%", height: "auto" }}
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
                             }}
                           />
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
+                    <div className="swiper-button-prev product-slider-prev"></div>
+                    <div className="swiper-button-next product-slider-next"></div>
                     <div className="swiper-pagination"></div>
                   </div>
-                  {product.productImages && product.productImages.length > 1 && (
+                  {(() => {
+                    const imgs = (product.productImages && (product.productImages as any[]).length > 0)
+                      ? (product.productImages as any[]).map((img) => ({ imageUrl: img.mediaUrl || img.imageUrl }))
+                      : localImageUrls;
+                    return imgs.length > 1 && (
                     <div className="swiper product-thumbnail-slider">
                       <div className="swiper-wrapper">
-                        {product.productImages.map((img, idx) => (
-                          <div key={idx} className="swiper-slide" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {imgs.map((img, idx) => (
+                          <div key={idx} className="swiper-slide" style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                             <div style={{ width: "100%", height: "120px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <Image
+                              <img
                                 src={getImageUrl(img.imageUrl || product.thumbnailImageUrl)}
                                 alt={`${product.name} - Thumbnail ${idx + 1}`}
                                 className="img-fluid"
-                                width={150}
-                                height={200}
                                 style={{ objectFit: "contain", width: "100%", height: "100%" }}
-                                unoptimized
+                                loading="lazy"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
                                 }}
@@ -264,7 +286,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                         ))}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -272,15 +295,34 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <div className="product-info">
                   <h1 className="element-title text-uppercase mb-3">{product.name}</h1>
 
-                  <div className="product-price mb-4">
-                    <strong>{product.price ? `₺${product.price.toFixed(2)}` : "Fiyat Belirtilmemiş"}</strong>
-                    {product.oldPrice && product.oldPrice > product.price && (
-                      <del className="ms-2 text-muted">₺{product.oldPrice.toFixed(2)}</del>
-                    )}
-                  </div>
+                  {(() => {
+                    const sp = product.specialPrice;
+                    const now = new Date();
+                    const hasDiscount = sp && sp > 0 && sp < product.price
+                      && (!product.specialPriceStart || new Date(product.specialPriceStart) <= now)
+                      && (!product.specialPriceEnd || new Date(product.specialPriceEnd) >= now);
+                    return (
+                      <div className="product-price mb-4">
+                        {hasDiscount ? (
+                          <>
+                            <span className="badge bg-success me-2">%{Math.round((1 - sp / product.price) * 100)} İndirim</span>
+                            <del className="text-muted me-2">₺{product.price.toFixed(2)}</del>
+                            <strong className="text-danger fs-4">₺{sp.toFixed(2)}</strong>
+                          </>
+                        ) : (
+                          <>
+                            <strong>{product.price ? `₺${product.price.toFixed(2)}` : "Fiyat Belirtilmemiş"}</strong>
+                            {product.oldPrice && product.oldPrice > product.price && (
+                              <del className="ms-2 text-muted">₺{product.oldPrice.toFixed(2)}</del>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {product.shortDescription && (
-                    <p className="mb-4">{product.shortDescription}</p>
+                    <ShortDescription content={product.shortDescription} />
                   )}
                   {product.description && (
                     <div className="mb-4" dangerouslySetInnerHTML={{ __html: product.description }} />
@@ -289,16 +331,29 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <div className="product-quantity mb-4">
                     <label className="d-block mb-2 text-uppercase">Adet:</label>
                     <div className="qty-number d-flex align-items-center">
-                      <button className="quntity-button quantity-left-minus">-</button>
+                      <button
+                        type="button"
+                        className="quntity-button quantity-left-minus"
+                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      >
+                        -
+                      </button>
                       <input
                         type="number"
                         id="quantity"
                         name="quantity"
                         min="1"
-                        defaultValue="1"
+                        value={quantity}
+                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
                         className="form-control text-center"
                       />
-                      <button className="quntity-button quantity-right-plus">+</button>
+                      <button
+                        type="button"
+                        className="quntity-button quantity-right-plus"
+                        onClick={() => setQuantity((q) => q + 1)}
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
 
@@ -336,6 +391,39 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   )}
               </div>
             </div>
+
+            {/* Reviews section */}
+            {reviews && (
+              <div className="mt-5 pt-4 border-top">
+                <h3 className="mb-4">Müşteri Değerlendirmeleri</h3>
+                {reviews.reviewsCount > 0 ? (
+                  <>
+                    <div className="d-flex align-items-center gap-3 mb-4">
+                      <div className="d-flex align-items-center">
+                        <span className="fs-4 fw-bold">{reviews.ratingAverage?.toFixed(1) ?? "-"}</span>
+                        <span className="text-warning ms-1">★</span>
+                      </div>
+                      <span className="text-muted">({reviews.reviewsCount} değerlendirme)</span>
+                    </div>
+                    <div className="review-list">
+                      {reviews.items.map((r) => (
+                        <div key={r.id} className="mb-4 p-3" style={{ border: "1px solid #e5e5e5" }}>
+                          <div className="d-flex align-items-center gap-2 mb-2">
+                            <span className="text-warning">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
+                            <strong>{r.reviewerName}</strong>
+                            <small className="text-muted">{new Date(r.createdOn).toLocaleDateString("tr-TR")}</small>
+                          </div>
+                          {r.title && <div className="fw-medium">{r.title}</div>}
+                          {r.comment && <div className="text-muted">{r.comment}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-muted">Henüz değerlendirme yapılmamış.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>

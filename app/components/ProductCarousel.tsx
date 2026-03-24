@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState, useCallback, useEffect } from "react";
 import { getImageUrl } from "../lib/api/config";
@@ -14,6 +13,14 @@ export interface CarouselProduct {
   img: string;
   title: string;
   price: string;
+  stockQuantity?: number;
+  stockTrackingIsEnabled?: boolean;
+  specialPrice?: number;
+  originalPrice?: number;
+}
+
+function isCarouselOutOfStock(p: CarouselProduct) {
+  return p.stockTrackingIsEnabled === true && (p.stockQuantity ?? 0) <= 0;
 }
 
 export interface ProductCarouselProps {
@@ -73,6 +80,35 @@ export default function ProductCarousel({
     el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
   };
 
+  // Auto-scroll every 5 seconds, pause on hover/touch
+  const pausedRef = useRef(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || products.length <= 1) return;
+    const interval = setInterval(() => {
+      if (pausedRef.current) return;
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      if (scrollLeft >= scrollWidth - clientWidth - 2) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        scroll("right");
+      }
+    }, 5000);
+    const pause = () => { pausedRef.current = true; };
+    const resume = () => { pausedRef.current = false; };
+    el.addEventListener("mouseenter", pause);
+    el.addEventListener("mouseleave", resume);
+    el.addEventListener("touchstart", pause, { passive: true });
+    el.addEventListener("touchend", resume);
+    return () => {
+      clearInterval(interval);
+      el.removeEventListener("mouseenter", pause);
+      el.removeEventListener("mouseleave", resume);
+      el.removeEventListener("touchstart", pause);
+      el.removeEventListener("touchend", resume);
+    };
+  }, [products.length]);
+
   if (products.length === 0) return null;
 
   return (
@@ -82,10 +118,10 @@ export default function ProductCarousel({
       style={compactBottom ? { marginBottom: 0, paddingBottom: 0 } : undefined}
     >
       <div className={`container ${compactBottom ? "pb-0 mb-0" : "section-spacing"}`}>
-        <div className="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div className="d-flex flex-column flex-md-row flex-md-wrap align-items-stretch align-items-md-center justify-content-md-between gap-2 gap-md-3 mb-4">
           <h4 className="text-uppercase mb-0">{title}</h4>
           {showViewAllLink && (
-            <Link href="/products" className="btn-link">
+            <Link href="/urunler" className="btn-link product-carousel-view-all text-center text-md-end py-1 py-md-0">
               Tüm Ürünleri Gör
             </Link>
           )}
@@ -139,16 +175,31 @@ export default function ProductCarousel({
                 }}
               >
                 <div className="product-item link-effect">
-                  <div className="image-holder position-relative overflow-hidden" style={{ aspectRatio: "9/16", width: "100%" }}>
-                    <Link href={`/products/${product.id}`} className="d-block w-100 h-100 position-relative">
-                      <Image
+                  <div className="image-holder position-relative">
+                    {product.stockQuantity !== undefined && product.stockQuantity > 0 && product.stockQuantity <= 3 && (
+                      <span className="stock-badge">Son {product.stockQuantity} ürün!</span>
+                    )}
+                    {product.specialPrice && product.originalPrice && product.specialPrice < product.originalPrice && (
+                      <span className="discount-badge">%{Math.round((1 - product.specialPrice / product.originalPrice) * 100)} İndirim</span>
+                    )}
+                    {isCarouselOutOfStock(product) && (
+                      <span className="out-of-stock-badge">Tükendi</span>
+                    )}
+                    <Link href={`/urunler/${product.id}`}>
+                      <img
                         src={getImageUrl(product.img)}
                         alt={product.title}
-                        className="product-image"
-                        fill
-                        sizes="(max-width: 768px) 85vw, 280px"
-                        style={{ objectFit: "cover", objectPosition: "center" }}
-                        unoptimized
+                        className={`product-image${isCarouselOutOfStock(product) ? " out-of-stock-thumb" : ""}`}
+                        style={{
+                          width: "100%",
+                          aspectRatio: "9/16",
+                          objectFit: "cover",
+                          display: "block",
+                          ...(isCarouselOutOfStock(product)
+                            ? { opacity: 0.45, filter: "grayscale(85%)" }
+                            : {}),
+                        }}
+                        loading="lazy"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = "/images/product-item-1.jpg";
                         }}
@@ -157,10 +208,14 @@ export default function ProductCarousel({
                   </div>
                   <div className="product-content">
                     <h5 className="element-title text-uppercase fs-6 mt-3">
-                      <Link href={`/products/${product.id}`}>{product.title}</Link>
+                      <Link href={`/urunler/${product.id}`}>{product.title}</Link>
                     </h5>
-                    <Link href={`/products/${product.id}`} className="text-decoration-none" data-after="Sepete Ekle">
-                      <span>{product.price}</span>
+                    <Link href={`/urunler/${product.id}`} className="text-decoration-none" data-after="Sepete Ekle">
+                      {product.specialPrice && product.originalPrice && product.specialPrice < product.originalPrice ? (
+                        <><del className="text-muted me-1">₺{product.originalPrice.toFixed(2)}</del> <span className="text-danger fw-bold">₺{product.specialPrice.toFixed(2)}</span></>
+                      ) : (
+                        <span>{product.price}</span>
+                      )}
                     </Link>
                   </div>
                 </div>

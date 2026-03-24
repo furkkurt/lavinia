@@ -1,13 +1,31 @@
 import { API_BASE_URL, apiFetch, setAuthToken, removeAuthToken, getAuthToken } from './config';
 
+/** Validate token by calling an auth-required API. Returns false and clears localStorage on 401. */
+export async function validateToken(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const token = getAuthToken();
+  if (!token) return false;
+  const res = await apiFetch<unknown[]>('/api/user/orders');
+  if (res.status === 401) {
+    localStorage.removeItem('isLoggedIn');
+    removeAuthToken();
+    localStorage.removeItem('user');
+    localStorage.removeItem('adminUser');
+    return false;
+  }
+  return true;
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface AdminLoginCredentials {
   username: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface RegisterData {
@@ -80,7 +98,7 @@ export async function login(credentials: LoginCredentials): Promise<{ success: b
       body: JSON.stringify({
         emailOrUserName: credentials.email.trim(),
         password: credentials.password,
-        rememberMe: true,
+        rememberMe: credentials.rememberMe ?? false,
       }),
     });
 
@@ -103,6 +121,7 @@ export async function login(credentials: LoginCredentials): Promise<{ success: b
       email: (data as any).email ?? credentials.email,
       fullName: (data as any).fullName ?? '',
     }));
+    localStorage.setItem('isLoggedIn', 'true');
 
     return { success: true };
   } catch (error: any) {
@@ -125,7 +144,7 @@ export async function adminLogin(credentials: AdminLoginCredentials): Promise<{ 
       body: JSON.stringify({
         emailOrUserName: credentials.username.trim(),
         password: credentials.password,
-        rememberMe: true,
+        rememberMe: credentials.rememberMe ?? false,
       }),
     });
 

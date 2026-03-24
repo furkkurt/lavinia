@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SvgSprite from "../components/SvgSprite";
-import { getUserOrders, getUserOrder, OrderListItem, OrderDetail, getInvoiceUrl } from "../lib/api/orders";
+import { getUserOrders, getUserOrder, OrderListItem, OrderDetail, downloadInvoicePdf } from "../lib/api/orders";
+import { createReview } from "../lib/api/reviews";
 import {
   getAddresses, createAddress, updateAddress, deleteAddress,
-  setDefaultAddress, UserAddress, AddressFormData,
+  setDefaultAddress, UserAddress, AddressFormData, getStates,
 } from "../lib/api/addresses";
 import { getCurrentUser } from "../lib/api/auth";
 import { getImageUrl } from "../lib/api/config";
@@ -37,6 +38,15 @@ export default function ProfilePage() {
   });
   const [addrSubmitting, setAddrSubmitting] = useState(false);
   const [addrError, setAddrError] = useState<string | null>(null);
+  const [provinces, setProvinces] = useState<{ id: number; name: string }[]>([]);
+
+  // Review modal (for completed orders - single product at a time)
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewOrder, setReviewOrder] = useState<OrderDetail | null>(null);
+  const [reviewForm, setReviewForm] = useState<Record<number, { rating: number; comment: string }>>({});
+  const [reviewSingleProductId, setReviewSingleProductId] = useState<number | null>(null); // null = all products, number = just this one
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     const preloader = document.querySelector(".preloader");
@@ -46,15 +56,69 @@ export default function ProfilePage() {
 
   const init = async () => {
     setLoading(true);
-    const [userData, ordersData, addrsData] = await Promise.all([
-      getCurrentUser(),
-      getUserOrders(),
-      getAddresses(),
-    ]);
-    setUser(userData);
-    setOrders(ordersData);
-    setAddresses(addrsData);
+    try {
+      const [userData, ordersData, addrsData, trStates] = await Promise.all([
+        getCurrentUser(),
+        getUserOrders(),
+        getAddresses(),
+        getStates("TR"),
+      ]);
+      setUser(userData);
+      setOrders(ordersData);
+      setAddresses(addrsData);
+      setProvinces(trStates);
+    } catch (e) {
+      console.error("[Profil] Veri veya il listesi yüklenemedi:", e);
+      const [userData, ordersData, addrsData] = await Promise.all([
+        getCurrentUser(),
+        getUserOrders(),
+        getAddresses(),
+      ]);
+      setUser(userData);
+      setOrders(ordersData);
+      setAddresses(addrsData);
+    }
     setLoading(false);
+  };
+
+  /** Open review modal for a single product (when user clicks Değerlendir on that product) */
+  const openReviewModalForProduct = (order: OrderDetail, productId: number) => {
+    setReviewOrder(order);
+    setReviewForm({ [productId]: { rating: 5, comment: "" } });
+    setReviewError(null);
+    setReviewSingleProductId(productId); // Only review this one product
+    setShowReviewModal(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewOrder) return;
+    setReviewSubmitting(true);
+    setReviewError(null);
+    try {
+      const productIdsToReview = reviewSingleProductId != null
+        ? [reviewSingleProductId]
+        : Array.from(new Set(reviewOrder.orderItems.map((i) => i.productId)));
+      for (const productId of productIdsToReview) {
+        const f = reviewForm[productId];
+        if (!f) continue;
+        const res = await createReview({
+          entityId: productId,
+          entityTypeId: "Product",
+          rating: f.rating,
+          comment: f.comment || "",
+        });
+        if (!res.success) {
+          setReviewError(res.error || "Değerlendirme kaydedilemedi");
+          return;
+        }
+      }
+      setShowReviewModal(false);
+      setReviewOrder(null);
+      setReviewForm({});
+      setReviewSingleProductId(null);
+    } finally {
+      setReviewSubmitting(false);
+    }
   };
 
   const toggleOrderDetail = async (orderId: number) => {
@@ -71,15 +135,17 @@ export default function ProfilePage() {
   };
 
   const handleSaveAddress = async () => {
-    if (!addrForm.contactName || !addrForm.phone || !addrForm.addressLine1 || !addrForm.city) {
+    if (!addrForm.contactName || !addrForm.phone || !addrForm.addressLine1) {
       setAddrError("Lütfen tüm zorunlu alanları doldurun");
+      return;
+    }
+    if (!addrForm.stateOrProvinceId) {
+      setAddrError("Lütfen il seçiniz");
       return;
     }
     setAddrSubmitting(true);
     setAddrError(null);
-    // TR için varsayılan İstanbul (133); diğer ülkeler için mevcut state
-    const defaultState = addrForm.countryId === "TR" ? 133 : 1;
-    const data = { ...addrForm, stateOrProvinceId: addrForm.stateOrProvinceId || defaultState };
+    const data = { ...addrForm };
     let ok: boolean;
     if (editingAddr) {
       ok = await updateAddress(editingAddr, data);
@@ -111,10 +177,13 @@ export default function ProfilePage() {
 
   const startEditAddress = (addr: UserAddress) => {
     setEditingAddr(addr.id);
+    const provName =
+      provinces.find((p) => p.id === addr.stateOrProvinceId)?.name || addr.stateOrProvinceName || addr.city || "";
     setAddrForm({
       contactName: addr.contactName, phone: addr.phone,
       addressLine1: addr.addressLine1, addressLine2: addr.addressLine2,
-      city: addr.city, stateOrProvinceId: addr.stateOrProvinceId,
+      city: provName,
+      stateOrProvinceId: addr.stateOrProvinceId,
       countryId: addr.countryId || "TR",
     });
     setShowNewAddr(true);
@@ -193,7 +262,7 @@ export default function ProfilePage() {
             {orders.length === 0 ? (
               <div className="text-center py-5">
                 <p className="text-muted">Henüz siparişiniz bulunmuyor.</p>
-                <Link href="/products" className="btn btn-dark" style={{ borderRadius: 0 }}>Alışverişe Başla</Link>
+                <Link href="/urunler" className="btn btn-dark" style={{ borderRadius: 0 }}>Alışverişe Başla</Link>
               </div>
             ) : (
               <div>
@@ -249,7 +318,10 @@ export default function ProfilePage() {
                             )}
                             <table className="table table-sm">
                               <thead>
-                                <tr><th>Ürün</th><th>Adet</th><th>Fiyat</th><th>Toplam</th></tr>
+                                <tr>
+                                  <th>Ürün</th><th>Adet</th><th>Fiyat</th><th>Toplam</th>
+                                  {orderDetail.orderStatus === 70 && <th></th>}
+                                </tr>
                               </thead>
                               <tbody>
                                 {orderDetail.orderItems.map((item) => (
@@ -259,12 +331,24 @@ export default function ProfilePage() {
                                         {item.productImage && (
                                           <Image src={getImageUrl(item.productImage)} alt={item.productName} width={40} height={50} style={{ objectFit: "cover" }} />
                                         )}
-                                        <Link href={`/products/${item.productId}`} style={{ color: "#000", textDecoration: "none" }}>{item.productName}</Link>
+                                        <Link href={`/urunler/${item.productId}`} style={{ color: "#000", textDecoration: "none" }}>{item.productName}</Link>
                                       </div>
                                     </td>
                                     <td>{item.quantity}</td>
                                     <td>{item.productPriceString}</td>
                                     <td>{item.totalString}</td>
+                                    {orderDetail.orderStatus === 70 && (
+                                      <td>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); openReviewModalForProduct(orderDetail, item.productId); }}
+                                          className="btn btn-outline-primary btn-sm"
+                                          style={{ borderRadius: 0 }}
+                                        >
+                                          Değerlendir
+                                        </button>
+                                      </td>
+                                    )}
                                   </tr>
                                 ))}
                               </tbody>
@@ -273,15 +357,16 @@ export default function ProfilePage() {
                               <div>
                                 <strong>Toplam: {orderDetail.orderTotalString}</strong>
                               </div>
-                              <a
-                                href={getInvoiceUrl(orderDetail.id)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn-outline-dark btn-sm"
-                                style={{ borderRadius: 0 }}
-                              >
-                                Fatura İndir
-                              </a>
+                              <div className="d-flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => downloadInvoicePdf(orderDetail.id)}
+                                  className="btn btn-outline-dark btn-sm"
+                                  style={{ borderRadius: 0 }}
+                                >
+                                  Fatura İndir
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ) : null}
@@ -321,8 +406,26 @@ export default function ProfilePage() {
                     <input type="text" className="form-control" style={{ borderRadius: 0 }} value={addrForm.addressLine1} onChange={(e) => setAddrForm({ ...addrForm, addressLine1: e.target.value })} />
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label">Şehir *</label>
-                    <input type="text" className="form-control" style={{ borderRadius: 0 }} value={addrForm.city || ""} onChange={(e) => setAddrForm({ ...addrForm, city: e.target.value })} />
+                    <label className="form-label">İl *</label>
+                    <select
+                      className="form-select"
+                      style={{ borderRadius: 0 }}
+                      value={addrForm.stateOrProvinceId || ""}
+                      onChange={(e) => {
+                        const id = Number(e.target.value);
+                        const prov = provinces.find((p) => p.id === id);
+                        setAddrForm({
+                          ...addrForm,
+                          stateOrProvinceId: id,
+                          city: prov?.name || addrForm.city,
+                        });
+                      }}
+                    >
+                      <option value="">İl seçiniz</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="col-md-6">
                     <label className="form-label">İlçe</label>
@@ -385,6 +488,86 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Review Modal for completed orders */}
+      {showReviewModal && reviewOrder && (
+        <div className="modal show d-block" style={{ background: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Siparişi Değerlendir</h5>
+                <button type="button" className="btn-close" onClick={() => { setShowReviewModal(false); setReviewOrder(null); setReviewSingleProductId(null); }} aria-label="Kapat" />
+              </div>
+              <div className="modal-body">
+                {reviewError && <div className="alert alert-danger py-2">{reviewError}</div>}
+                <p className="text-muted small mb-3">
+                  {reviewSingleProductId != null ? "Bu ürünü değerlendirin." : "Satın aldığınız ürünleri değerlendirin."}
+                </p>
+                {Array.from(new Map(reviewOrder.orderItems.map((i) => [i.productId, i])).values())
+                  .filter((item) => reviewSingleProductId == null || item.productId === reviewSingleProductId)
+                  .map((item) => {
+                  const f = reviewForm[item.productId] ?? { rating: 5, comment: "" };
+                  return (
+                    <div key={item.id} className="mb-4 p-3" style={{ border: "1px solid #e5e5e5" }}>
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        {item.productImage && (
+                          <Image src={getImageUrl(item.productImage)} alt={item.productName} width={40} height={50} style={{ objectFit: "cover" }} />
+                        )}
+                        <strong>{item.productName}</strong>
+                      </div>
+                      <div className="mb-2">
+                        <label className="form-label small mb-1">Puan (1-5)</label>
+                        <div className="d-flex gap-1 align-items-center">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              className="btn btn-link p-0 border-0"
+                              style={{ fontSize: "1.5rem", color: n <= f.rating ? "#ffc107" : "#ddd", textDecoration: "none" }}
+                              onClick={() =>
+                                setReviewForm((prev) => ({
+                                  ...prev,
+                                  [item.productId]: { ...(prev[item.productId] ?? { rating: 5, comment: "" }), rating: n },
+                                }))
+                              }
+                              aria-label={`${n} yıldız`}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="form-label small mb-1">Yorum (isteğe bağlı)</label>
+                        <textarea
+                          className="form-control form-control-sm"
+                          rows={2}
+                          placeholder="Ürün hakkında düşüncenizi yazın..."
+                          value={f.comment}
+                          onChange={(e) =>
+                            setReviewForm((prev) => ({
+                              ...prev,
+                              [item.productId]: { ...(prev[item.productId] ?? { rating: 5, comment: "" }), comment: e.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" style={{ borderRadius: 0 }} onClick={() => { setShowReviewModal(false); setReviewOrder(null); setReviewSingleProductId(null); }}>
+                  İptal
+                </button>
+                <button type="button" className="btn btn-primary" style={{ borderRadius: 0 }} onClick={handleSubmitReview} disabled={reviewSubmitting}>
+                  {reviewSubmitting ? "Gönderiliyor..." : "Değerlendirmeyi Gönder"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </>

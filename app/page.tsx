@@ -7,11 +7,11 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ProductCarousel from "./components/ProductCarousel";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { getProductsGrid, ProductGridParams } from "./lib/api/products";
-import { getImageUrl, API_BASE_URL } from "./lib/api/config";
+import { useEffect, useState, useMemo } from "react";
+import { getProductsGrid, getBestsellersGrid, ProductGridParams } from "./lib/api/products";
+import { getImageUrl } from "./lib/api/config";
 import { getMenuCategories, CategoryMenuItem } from "./lib/api/categories";
-import { getRecentBrandsWithProductImage, RecentBrandWithImage } from "./lib/api/brands";
+import { getFeaturedReviews, ProductReview } from "./lib/api/reviews";
 
 export type HeroCarouselItem = {
   image: string;
@@ -30,13 +30,57 @@ const productFilter = {
   ],
 };
 
-function toCarouselProduct(p: { id: number; name?: string; thumbnailImageUrl?: string; price?: number }) {
+function isSpecialPriceActive(p: any): boolean {
+  if (!p.specialPrice || p.specialPrice <= 0) return false;
+  const now = new Date();
+  if (p.specialPriceStart && new Date(p.specialPriceStart) > now) return false;
+  if (p.specialPriceEnd && new Date(p.specialPriceEnd) < now) return false;
+  return p.specialPrice < (p.price ?? 0);
+}
+
+function toCarouselProduct(p: any) {
+  const hasDiscount = isSpecialPriceActive(p);
   return {
     id: p.id,
     img: getImageUrl(p.thumbnailImageUrl),
     title: p.name || "Ürün",
-    price: `₺${(p.price ?? 0).toFixed(2)}`,
+    price: `₺${(hasDiscount ? p.specialPrice : (p.price ?? 0)).toFixed(2)}`,
+    stockQuantity: p.stockQuantity as number | undefined,
+    stockTrackingIsEnabled: p.stockTrackingIsEnabled as boolean | undefined,
+    specialPrice: hasDiscount ? p.specialPrice : undefined,
+    originalPrice: hasDiscount ? p.price : undefined,
   };
+}
+
+/** Anasayfa: Üst Giyim, Alt Giyim, Dış Giyim, Aksesuar sırası */
+function pickHomepageCategoryCards(cats: CategoryMenuItem[]): CategoryMenuItem[] {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const targets = ["ust giyim", "alt giyim", "dis giyim", "aksesuar"];
+  const out: CategoryMenuItem[] = [];
+  for (const t of targets) {
+    const found = cats.find((c) => {
+      const n = norm(c.name);
+      const slug = norm((c.slug || "").replace(/-/g, " "));
+      return n.includes(t) || slug.includes(t.replace(/ /g, "")) || slug.includes(t);
+    });
+    if (found && !out.some((x) => x.id === found.id)) out.push(found);
+  }
+  return out;
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 export default function Home() {
@@ -46,11 +90,76 @@ export default function Home() {
   const [recommendedProducts, setRecommendedProducts] = useState<{ id: number; img: string; title: string; price: string }[]>([]);
   const [heroCarouselItems, setHeroCarouselItems] = useState<HeroCarouselItem[]>([]);
   const [topCategories, setTopCategories] = useState<CategoryMenuItem[]>([]);
-  const [recentBrands, setRecentBrands] = useState<RecentBrandWithImage[]>([]);
+  const [featuredReviews, setFeaturedReviews] = useState<ProductReview[]>([]);
   const [loading, setLoading] = useState(true);
+  /** categoryId -> ürün thumbnail URL havuzu (kategori + alt kategoriler grid'den) */
+  const [categoryThumbPools, setCategoryThumbPools] = useState<Record<number, string[]>>({});
+  /** Her kartta gösterilen havuz indeksi */
+  const [categoryThumbIndex, setCategoryThumbIndex] = useState<Record<number, number>>({});
 
-  /** Kategoriler bölümünde gösterilecek sabit etiketler (site Türkçe) */
-  const categoryLabels = ["Erkek", "Kadın", "Takı"];
+  const homeCategoryCards = useMemo(() => pickHomepageCategoryCards(topCategories), [topCategories]);
+
+  const fallbackBanner = (i: number) => `/images/banner-image-${(i % 6) + 1}.jpg`;
+
+  useEffect(() => {
+    if (homeCategoryCards.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const pools: Record<number, string[]> = {};
+      await Promise.all(
+        homeCategoryCards.map(async (cat) => {
+          try {
+            const res = await getProductsGrid({
+              pageIndex: 0,
+              pageSize: 24,
+              categorySlug: cat.slug,
+              sort: [{ field: "id", dir: "desc" }],
+              filter: productFilter,
+            });
+            if (cancelled) return;
+            const urls = shuffleArray(
+              (res?.data ?? [])
+                .map((p) => getImageUrl(p.thumbnailImageUrl))
+                .filter((u) => u && !u.includes("product-item-1.jpg"))
+            );
+            pools[cat.id] = urls.length > 0 ? urls : [];
+          } catch {
+            if (!cancelled) pools[cat.id] = [];
+          }
+        })
+      );
+      if (!cancelled) {
+        setCategoryThumbPools(pools);
+        const initialIdx: Record<number, number> = {};
+        for (const c of homeCategoryCards) {
+          const len = pools[c.id]?.length ?? 0;
+          initialIdx[c.id] = len > 0 ? Math.floor(Math.random() * len) : 0;
+        }
+        setCategoryThumbIndex(initialIdx);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [homeCategoryCards]);
+
+  useEffect(() => {
+    if (homeCategoryCards.length === 0) return;
+    const timer = window.setInterval(() => {
+      setCategoryThumbIndex((prev) => {
+        const next = { ...prev };
+        for (const c of homeCategoryCards) {
+          const pool = categoryThumbPools[c.id] || [];
+          if (pool.length <= 1) continue;
+          let n = Math.floor(Math.random() * pool.length);
+          if (n === prev[c.id]) n = (n + 1) % pool.length;
+          next[c.id] = n;
+        }
+        return next;
+      });
+    }, 4500);
+    return () => window.clearInterval(timer);
+  }, [homeCategoryCards, categoryThumbPools]);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,18 +178,11 @@ export default function Home() {
           ],
         },
       };
-      console.log("[Home] fetchProducts başladı, API_BASE_URL:", API_BASE_URL, "params:", params);
-
       try {
         setLoading(true);
         const response = await getProductsGrid(params);
 
-        console.log("[Home] getProductsGrid response:", response);
-        console.log("[Home] response?.data length:", response?.data?.length);
-        console.log("[Home] response?.total:", response?.total);
-
         if (!isMounted) {
-          console.log("[Home] unmounted, skip setState");
           return;
         }
 
@@ -88,10 +190,14 @@ export default function Home() {
           const carousel = response.data.map(toCarouselProduct);
           setEnSonEklenen(carousel.slice(0, 9));
           setNewArrivals(carousel.slice(0, 12));
-          setBestSellers(carousel.slice(0, 12));
           setRecommendedProducts(carousel.length > 8 ? carousel.slice(4, 16) : carousel);
-        } else {
-          console.warn("[Home] response boş veya data yok:", { hasResponse: !!response, dataLength: response?.data?.length });
+        }
+
+        const best = await getBestsellersGrid({ pageIndex: 0, pageSize: 12 });
+        if (isMounted && best?.data?.length) {
+          setBestSellers(best.data.map(toCarouselProduct));
+        } else if (isMounted && response?.data?.length) {
+          setBestSellers(response.data.slice(0, 12).map(toCarouselProduct));
         }
       } catch (e: any) {
         console.error("[Home] fetchProducts hata:", e?.message ?? e, "status:", e?.status);
@@ -99,7 +205,6 @@ export default function Home() {
       } finally {
         if (isMounted) {
           setLoading(false);
-          console.log("[Home] fetchProducts bitti, loading=false");
         }
       }
     };
@@ -110,9 +215,8 @@ export default function Home() {
     const fetchCategories = async () => {
       try {
         const categories = await getMenuCategories();
-        if (categories && categories.length >= 3) {
-          // Take first 3 categories
-          setTopCategories(categories.slice(0, 3));
+        if (categories && categories.length > 0) {
+          setTopCategories(categories);
         }
       } catch (error) {
         // Silently fail
@@ -121,15 +225,15 @@ export default function Home() {
 
     fetchCategories();
 
-    const fetchRecentBrands = async () => {
+    const fetchReviews = async () => {
       try {
-        const data = await getRecentBrandsWithProductImage();
-        if (data && data.length > 0) setRecentBrands(data.slice(0, 3));
+        const data = await getFeaturedReviews();
+        if (isMounted && data.length > 0) setFeaturedReviews(data);
       } catch {
         // ignore
       }
     };
-    fetchRecentBrands();
+    fetchReviews();
 
     // Hide preloader when page loads
     const preloader = document.querySelector(".preloader");
@@ -157,7 +261,7 @@ export default function Home() {
               type="search"
               id="search-form"
               className="form-control border-0 border-bottom"
-              placeholder="Type and press enter"
+              placeholder="Yazın ve Enter'a basın"
               defaultValue=""
               name="s"
             />
@@ -172,29 +276,29 @@ export default function Home() {
             </button>
           </form>
 
-          <h5 className="cat-list-title">Browse Categories</h5>
+          <h5 className="cat-list-title">Kategorilere Göz At</h5>
 
           <ul className="cat-list">
             <li className="cat-list-item">
-              <a href="#" title="Jackets">Jackets</a>
+              <Link href="/urunler?category=ceket" title="Ceket">Ceket</Link>
             </li>
             <li className="cat-list-item">
-              <a href="#" title="T-shirts">T-shirts</a>
+              <Link href="/urunler?category=tisort" title="Tişört">Tişört</Link>
             </li>
             <li className="cat-list-item">
-              <a href="#" title="Handbags">Handbags</a>
+              <Link href="/urunler?category=canta" title="Çanta">Çanta</Link>
             </li>
             <li className="cat-list-item">
-              <a href="#" title="Accessories">Accessories</a>
+              <Link href="/urunler?category=taki" title="Aksesuar">Aksesuar</Link>
             </li>
             <li className="cat-list-item">
-              <a href="#" title="Cosmetics">Cosmetics</a>
+              <Link href="/urunler?category=kozmetik" title="Kozmetik">Kozmetik</Link>
             </li>
             <li className="cat-list-item">
-              <a href="#" title="Dresses">Dresses</a>
+              <Link href="/urunler?category=gunluk-elbise" title="Elbise">Elbise</Link>
             </li>
             <li className="cat-list-item">
-              <a href="#" title="Jumpsuits">Jumpsuits</a>
+              <Link href="/urunler?category=tulum" title="Tulum">Tulum</Link>
             </li>
           </ul>
         </div>
@@ -205,7 +309,7 @@ export default function Home() {
         data-bs-scroll="true"
         tabIndex={-1}
         id="offcanvasCart"
-        aria-labelledby="My Cart"
+        aria-labelledby="Sepet"
       >
         <div className="offcanvas-header justify-content-center">
           <button
@@ -217,7 +321,7 @@ export default function Home() {
         </div>
         <div className="offcanvas-body">
           <div className="order-md-last">
-            <h4 className="d-flex justify-content-between align-items-center mb-3">
+            <h4 id="Sepet" className="d-flex justify-content-between align-items-center mb-3">
               <span className="text-primary">Sepetiniz</span>
               <span className="badge bg-primary rounded-pill">3</span>
             </h4>
@@ -258,83 +362,57 @@ export default function Home() {
 
       <Navbar />
 
-      {/* 1. Yeni Koleksiyonlar – veritabanında en son kullanılan 3 marka, kartta markanın ilk ürününün resmi */}
-      {recentBrands.length > 0 && (
-        <section className="container section-spacing">
-          <div className="text-center mb-4">
-            <h1 className="section-title">Yeni Koleksiyonlar</h1>
-            <p className="text-muted mx-auto" style={{ maxWidth: "42rem" }}>
-              Yeni sezon parçalarıyla tarzınızı keşfedin. Özenle seçilmiş koleksiyonlar sizleri bekliyor.
-            </p>
-          </div>
-          <div className="row g-4 justify-content-center">
-            {recentBrands.map((brand) => (
-              <div key={brand.id} className="col-md-4">
-                <div className="product-item image-zoom-effect link-effect">
-                  <div className="image-holder position-relative">
-                    <Link href={brand.slug ? `/products?brand=${encodeURIComponent(brand.slug)}` : "/products"}>
-                      <Image
-                        src={getImageUrl(brand.thumbnailImageUrl || "")}
-                        alt={brand.name}
-                        className="product-image img-fluid w-100"
-                        width={400}
-                        height={500}
-                        style={{ height: "auto", objectFit: "cover" }}
-                        unoptimized
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "/images/product-item-1.jpg";
-                        }}
-                      />
-                    </Link>
-                  </div>
-                  <div className="product-content text-center">
-                    <h5 className="element-title text-uppercase fs-6 mt-3">
-                      <Link href={brand.slug ? `/products?brand=${encodeURIComponent(brand.slug)}` : "/products"}>
-                        {brand.name}
-                      </Link>
-                    </h5>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* 2. YENİ GELENLER – tek tasarım: ProductCarousel */}
+      {/* 1. YENİ GELENLER – tek tasarım: ProductCarousel */}
       {newArrivals.length > 0 && (
         <ProductCarousel id="yeni-gelenler" title="Yeni Gelenler" products={newArrivals} additionalClassName="yeni-gelenler" compactBottom />
       )}
 
-      {/* 3. Kategoriler – Yeni Gelenler ile arasında boşluk yok; başlık "Kategoriler", Erkek / Kadın / Takı */}
-      {topCategories.length > 0 && (
-        <section className="collection bg-light position-relative pt-5 mt-5 section-spacing">
+      {/* 2. Kategoriler — ürün thumbnail’leri rastgele döner; alt kategori listesi yok */}
+      {homeCategoryCards.length > 0 && (
+        <section className="collection home-categories bg-light position-relative pt-5 mt-5 section-spacing">
           <div className="container">
             <div className="row">
-              <div className="title-xlarge text-uppercase txt-fx domino">Kategoriler</div>
-              <div className="collection-item d-flex flex-wrap my-5">
-                {topCategories.slice(0, 3).map((category, index) => (
-                  <div key={category.id} className="col-md-4 column-container">
-                    <div className="image-holder">
-                      <Link href={`/products?category=${category.slug}`}>
-                        <Image
-                          src={`/images/banner-image-${(index % 6) + 1}.jpg`}
-                          alt={categoryLabels[index] ?? category.name}
-                          className="product-image img-fluid"
-                          width={600}
-                          height={400}
-                        />
-                      </Link>
-                    </div>
-                    <div className="collection-content p-4 text-center bg-white">
-                      <h3 className="element-title text-uppercase">{categoryLabels[index] ?? category.name}</h3>
-                      <Link href={`/products?category=${category.slug}`} className="btn btn-dark text-uppercase mt-3">
-                        Kategoriyi Gör
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+              <div className="col-12 position-relative collection-heading-row mb-2 mb-md-3">
+                <h2 className="section-title text-uppercase mb-0 position-relative z-1 pt-1">Kategoriler</h2>
+                <div className="title-xlarge text-uppercase txt-fx domino home-categories-title-bg" aria-hidden="true">
+                  Kategoriler
+                </div>
               </div>
+            </div>
+            <div className="collection-item row g-3 g-lg-4 my-2 my-md-4 w-100 mx-0">
+                {homeCategoryCards.map((category, index) => {
+                  const pool = categoryThumbPools[category.id] || [];
+                  const idx = categoryThumbIndex[category.id] ?? 0;
+                  const imgSrc = pool.length > 0 ? pool[idx % pool.length] : fallbackBanner(index);
+                  const isRemote = imgSrc.startsWith("http://") || imgSrc.startsWith("https://");
+                  return (
+                    <div key={category.id} className="col-6 col-md-3 column-container mb-3 mb-lg-0">
+                      <div className="image-holder home-category-image-wrap position-relative overflow-hidden rounded-1">
+                        <Link href={`/urunler?category=${encodeURIComponent(category.slug)}`} className="d-block h-100">
+                          <Image
+                            key={imgSrc}
+                            src={imgSrc}
+                            alt={category.name}
+                            className="product-image img-fluid w-100 h-100 home-category-thumb-animate"
+                            width={360}
+                            height={640}
+                            style={{ objectFit: "cover" }}
+                            unoptimized={isRemote}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = fallbackBanner(index);
+                            }}
+                          />
+                        </Link>
+                      </div>
+                      <div className="collection-content p-2 p-md-4 text-center bg-white">
+                        <h3 className="element-title text-uppercase">{category.name}</h3>
+                        <Link href={`/urunler?category=${encodeURIComponent(category.slug)}`} className="btn btn-dark text-uppercase mt-1">
+                          Tümünü Gör
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </section>
@@ -345,25 +423,26 @@ export default function Home() {
         <ProductCarousel id="en-cok-satanlar" title="En Çok Satanlar" products={bestSellers} additionalClassName="best-sellers" />
       )}
 
-      {/* 7. Alıntı / yorumlar */}
+      {/* 7. Müşteri Yorumları */}
       <section className="testimonials section-spacing bg-light">
-        <div className="section-header text-center">
-          <h3 className="section-title">GÜZEL YORUMLARI SEVİYORUZ</h3>
+        <div className="section-header text-center testimonials-section-header px-2 px-md-3">
+          <h3 className="section-title testimonials-main-title">MÜŞTERİ YORUMLARI</h3>
         </div>
-        <div className="swiper testimonial-swiper overflow-hidden my-5">
+        <div className="swiper testimonial-swiper overflow-hidden mb-3 testimonials-swiper-body">
           <div className="swiper-wrapper d-flex">
-            {[
-              { text: "Beklentilerin çok üzerinde çılgınca yumuşak, esnek ve mükemmel oturan beyaz basit denim gömlek.", title: "günlük tarz" },
-              { text: "Beklentilerin çok üzerinde mükemmel oturan beyaz denim gömlek, çılgınca yumuşak ve esnek", title: "üst seviye" },
-              { text: "Beklentilerin çok üzerinde mükemmel oturan beyaz denim gömlek, beklenenden daha esnek ve çılgınca yumuşak.", title: "Denim tutkusu" },
-              { text: "Beklentilerin çok üzerinde mükemmel oturan beyaz denim gömlek, çılgınca yumuşak ve esnek", title: "üst seviye" },
-              { text: "Beklentilerin çok üzerinde çılgınca yumuşak, esnek ve mükemmel oturan beyaz basit denim gömlek.", title: "günlük tarz" },
-              { text: "Beklentilerin çok üzerinde mükemmel oturan beyaz denim gömlek, çılgınca yumuşak ve esnek", title: "moda sever" },
-            ].map((testimonial, idx) => (
+            {(featuredReviews.length > 0
+              ? featuredReviews.map((r) => ({ text: r.comment || r.title || "", title: r.reviewerName, rating: r.rating }))
+              : [
+                  { text: "Beklentilerin çok üzerinde çılgınca yumuşak, esnek ve mükemmel oturan beyaz basit denim gömlek.", title: "Müşteri", rating: 5 },
+                  { text: "Beklentilerin çok üzerinde mükemmel oturan beyaz denim gömlek, çılgınca yumuşak ve esnek", title: "Müşteri", rating: 5 },
+                  { text: "Beklentilerin çok üzerinde mükemmel oturan beyaz denim gömlek, beklenenden daha esnek ve çılgınca yumuşak.", title: "Müşteri", rating: 5 },
+                ]
+            ).map((testimonial, idx) => (
               <div key={idx} className="swiper-slide">
                 <div className="testimonial-item text-center">
                   <blockquote>
-                    <p>"{testimonial.text}"</p>
+                    <div className="mb-2 text-warning">{"★".repeat(testimonial.rating)}{"☆".repeat(5 - testimonial.rating)}</div>
+                    <p>&ldquo;{testimonial.text}&rdquo;</p>
                     <div className="review-title text-uppercase">{testimonial.title}</div>
                   </blockquote>
                 </div>
@@ -371,7 +450,7 @@ export default function Home() {
             ))}
           </div>
         </div>
-        <div className="testimonial-swiper-pagination d-flex justify-content-center mb-5"></div>
+        <div className="testimonial-swiper-pagination d-flex justify-content-center mb-0"></div>
       </section>
 
       {/* 8. DOPAMİN KAYNAKLARI – tek tasarım: ProductCarousel */}
@@ -411,7 +490,7 @@ export default function Home() {
             <div key={num} className="col-6 col-sm-4 col-md-2" style={{ padding: 0, margin: 0 }}>
               <div className="insta-item" style={{ height: "400px", overflow: "hidden", margin: 0 }}>
                 <a
-                  href="https://www.instagram.com/templatesjungle/"
+                  href="https://www.instagram.com/boutiquelavinia_/"
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ display: "block", height: "100%", width: "100%" }}
@@ -431,7 +510,7 @@ export default function Home() {
         </div>
         <div className="instagram-button-overlay">
           <a
-            href="https://www.instagram.com/templatesjungle/"
+            href="https://www.instagram.com/boutiquelavinia_/"
             className="btn btn-dark instagram-follow-btn"
             target="_blank"
             rel="noopener noreferrer"

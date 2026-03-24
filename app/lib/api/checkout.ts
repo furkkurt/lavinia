@@ -42,14 +42,34 @@ export async function getCheckoutSummary(checkoutId: string): Promise<CheckoutSu
   return response.data || null;
 }
 
+export interface GuestShippingAddress {
+  contactName: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  zipCode?: string;
+  stateOrProvinceId?: number;
+  countryId?: string;
+}
+
 export async function completeCheckout(
   checkoutId: string,
   shippingAddressId: number,
-  orderNote?: string
+  orderNote?: string,
+  guestShippingAddress?: GuestShippingAddress
 ): Promise<{ success: boolean; data?: CheckoutResult; error?: string }> {
+  const body: { shippingAddressId: number; orderNote?: string; guestShippingAddress?: GuestShippingAddress } = {
+    shippingAddressId,
+    orderNote,
+  };
+  if (guestShippingAddress) {
+    body.guestShippingAddress = guestShippingAddress;
+  }
+
   const response = await apiFetch<CheckoutResult>(`/api/checkout/${checkoutId}/complete`, {
     method: 'POST',
-    body: JSON.stringify({ shippingAddressId, orderNote }),
+    body: JSON.stringify(body),
   });
 
   if (response.error) {
