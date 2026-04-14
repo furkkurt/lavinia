@@ -1,9 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { getProduct, updateProduct, createProduct, Product } from "../../../lib/api/products";
+import {
+  getProductAdmin,
+  updateProduct,
+  createProduct,
+  Product,
+  parseCustomerOptions,
+} from "../../../lib/api/products";
+import { pickStockCaseInsensitive, variantRowsFromProductMatrix } from "../../../lib/productVariantStock";
+import { VariantStockEditor, type VariantColorRow } from "../VariantStockEditor";
 import { getBrands, Brand } from "../../../lib/api/brands";
 import { getCategories, Category } from "../../../lib/api/categories";
 import { importProductImages } from "../../../lib/api/legacyImport";
@@ -45,7 +53,25 @@ export default function EditProductPage() {
     metaTitle: "",
     metaKeywords: "",
     metaDescription: "",
+    customerSizeOptions: "",
   });
+
+  const [variantRows, setVariantRows] = useState<VariantColorRow[]>([]);
+
+  const sizeLabels = useMemo(() => {
+    const raw = typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : "";
+    const p = parseCustomerOptions(raw);
+    return p.length > 0 ? p : ["XS", "S", "M", "L", "XL", "XXL"];
+  }, [formData.customerSizeOptions]);
+
+  useEffect(() => {
+    setVariantRows((prev) =>
+      prev.map((r) => ({
+        name: r.name,
+        stocks: Object.fromEntries(sizeLabels.map((s) => [s, r.stocks[s] ?? 0])) as Record<string, number>,
+      }))
+    );
+  }, [sizeLabels.join("|")]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,7 +86,7 @@ export default function EditProductPage() {
         return;
       }
       const [product, brandsData, categoriesData] = await Promise.all([
-        getProduct(id),
+        getProductAdmin(id),
         getBrands(),
         getCategories(),
       ]);
@@ -100,7 +126,22 @@ export default function EditProductPage() {
           metaTitle: product.metaTitle ?? "",
           metaKeywords: product.metaKeywords ?? "",
           metaDescription: product.metaDescription ?? "",
+          customerSizeOptions:
+            product.customerSizeOptions == null
+              ? ""
+              : Array.isArray(product.customerSizeOptions)
+                ? product.customerSizeOptions.join(", ")
+                : String(product.customerSizeOptions),
         });
+        const sizeOptStr =
+          product.customerSizeOptions == null
+            ? ""
+            : Array.isArray(product.customerSizeOptions)
+              ? product.customerSizeOptions.join(", ")
+              : String(product.customerSizeOptions);
+        const parsedSizes = parseCustomerOptions(sizeOptStr);
+        const sizeListForRows = parsedSizes.length > 0 ? parsedSizes : ["XS", "S", "M", "L", "XL", "XXL"];
+        setVariantRows(variantRowsFromProductMatrix(product, sizeListForRows));
       }
       setFetching(false);
     };
@@ -155,10 +196,21 @@ export default function EditProductPage() {
     e.preventDefault();
     setLoading(true);
     try {
+      const namedVariants = variantRows.filter((r) => r.name.trim());
       const payload: Partial<Product> = {
         ...formData,
         thumbnailImage: thumbnailImage ?? undefined,
         productImages: productImages.map((img) => ({ image: img })),
+        customerColorOptions: "",
+        customerVariantStockJson:
+          namedVariants.length > 0
+            ? JSON.stringify({
+                colors: namedVariants.map((r) => ({
+                  name: r.name.trim(),
+                  stocks: r.stocks,
+                })),
+              })
+            : "",
       };
       if (isCreateMode) {
         const result = await createProduct(payload);
@@ -363,7 +415,7 @@ export default function EditProductPage() {
                   onChange={handleInputChange}
                 />
               </div>
-              <div className="col-md-6 mb-3">
+              <div className="col-12 col-md-6 mb-3">
                 <label className="form-label">Stok Adedi</label>
                 <input
                   type="number"
@@ -373,16 +425,19 @@ export default function EditProductPage() {
                   onChange={handleInputChange}
                 />
               </div>
-              <div className="col-md-6 mb-3">
-                <div className="form-check mt-4">
+              <div className="col-12 mb-3">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
                   <input
-                    className="form-check-input"
+                    className="form-check-input flex-shrink-0 m-0"
                     type="checkbox"
                     name="isCallForPricing"
+                    id="editIsCallForPricing"
                     checked={formData.isCallForPricing}
                     onChange={handleInputChange}
                   />
-                  <label className="form-check-label">Fiyat için Arayın</label>
+                  <label className="form-check-label mb-0" htmlFor="editIsCallForPricing" style={{ cursor: "pointer" }}>
+                    Fiyat için Arayın
+                  </label>
                 </div>
               </div>
             </div>
@@ -462,6 +517,35 @@ export default function EditProductPage() {
                   <small className="form-text text-muted">Bu ana kategoride alt kategori yok; ürün ana kategoriye atanır.</small>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card mb-4">
+          <div className="card-header">
+            <h5 className="mb-0">Renk × beden stoku</h5>
+          </div>
+          <div className="card-body">
+            <div className="row">
+              <div className="col-12 mb-3">
+                <label className="form-label" htmlFor="edit-customer-size-options">
+                  Beden sütunları (isteğe bağlı)
+                </label>
+                <input
+                  id="edit-customer-size-options"
+                  type="text"
+                  className="form-control"
+                  name="customerSizeOptions"
+                  value={typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : ""}
+                  onChange={handleInputChange}
+                  placeholder="Boş = XS, S, M, L, XL, XXL — özel: 36, 38, 40 veya S, M, L"
+                  autoComplete="off"
+                />
+                <small className="form-text text-muted">
+                  Virgülle ayırın. Matris tablosundaki sütun başlıkları buradan gelir.
+                </small>
+              </div>
+              <VariantStockEditor sizeLabels={sizeLabels} rows={variantRows} onChange={setVariantRows} />
             </div>
           </div>
         </div>
@@ -559,30 +643,32 @@ export default function EditProductPage() {
             <h5 className="mb-0">Yayın</h5>
           </div>
           <div className="card-body">
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    name="isPublished"
-                    checked={formData.isPublished}
-                    onChange={handleInputChange}
-                  />
-                  <label className="form-check-label">Ürün Aktif (Yayınla)</label>
-                </div>
+            <div className="d-flex flex-column gap-3">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <input
+                  className="form-check-input flex-shrink-0 m-0"
+                  type="checkbox"
+                  name="isPublished"
+                  id="editIsPublished"
+                  checked={formData.isPublished}
+                  onChange={handleInputChange}
+                />
+                <label className="form-check-label mb-0" htmlFor="editIsPublished" style={{ cursor: "pointer" }}>
+                  Ürün Aktif (Yayınla)
+                </label>
               </div>
-              <div className="col-md-6 mb-3">
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    name="isFeatured"
-                    checked={formData.isFeatured}
-                    onChange={handleInputChange}
-                  />
-                  <label className="form-check-label">Vitrin (Öne Çıkar)</label>
-                </div>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <input
+                  className="form-check-input flex-shrink-0 m-0"
+                  type="checkbox"
+                  name="isFeatured"
+                  id="editIsFeatured"
+                  checked={formData.isFeatured}
+                  onChange={handleInputChange}
+                />
+                <label className="form-check-label mb-0" htmlFor="editIsFeatured" style={{ cursor: "pointer" }}>
+                  Vitrin (Öne Çıkar)
+                </label>
               </div>
             </div>
           </div>

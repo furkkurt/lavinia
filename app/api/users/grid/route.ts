@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://31.210.43.159:5000';
+import { bearerFromRequest, serverInternalApiBase } from '@/app/lib/serverInternalApiBase';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    const response = await fetch(`${API_BASE_URL}/api/users/grid`, {
+    const response = await fetch(`${serverInternalApiBase()}/api/users/grid`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...bearerFromRequest(request),
       },
-      credentials: 'include',
       body: JSON.stringify(body),
     });
 

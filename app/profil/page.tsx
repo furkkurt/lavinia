@@ -5,14 +5,14 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SvgSprite from "../components/SvgSprite";
-import { getUserOrders, getUserOrder, OrderListItem, OrderDetail, downloadInvoicePdf } from "../lib/api/orders";
+import { getUserOrders, getUserOrder, OrderListItem, OrderDetail, downloadInvoicePdf, cancelUserOrder } from "../lib/api/orders";
 import { createReview } from "../lib/api/reviews";
 import {
   getAddresses, createAddress, updateAddress, deleteAddress,
   setDefaultAddress, UserAddress, AddressFormData, getStates,
 } from "../lib/api/addresses";
 import { getCurrentUser } from "../lib/api/auth";
-import { getImageUrl } from "../lib/api/config";
+import { getImageUrl, isApiHostedMediaSrc } from "../lib/api/config";
 import Image from "next/image";
 
 type Tab = "orders" | "addresses" | "account";
@@ -27,6 +27,7 @@ export default function ProfilePage() {
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [orderDetailLoading, setOrderDetailLoading] = useState(false);
+  const [orderCancelSubmitting, setOrderCancelSubmitting] = useState(false);
 
   // Addresses
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
@@ -134,6 +135,28 @@ export default function ProfilePage() {
     setOrderDetailLoading(false);
   };
 
+  const refreshOrdersAndDetail = async (orderId: number) => {
+    const list = await getUserOrders();
+    setOrders(list);
+    const detail = await getUserOrder(orderId);
+    setOrderDetail(detail);
+  };
+
+  const handleCancelOrder = async (orderId: number) => {
+    if (!confirm("Siparişi iptal etmek istediğinize emin misiniz? Bu işlem geri alınamaz.")) return;
+    setOrderCancelSubmitting(true);
+    try {
+      const res = await cancelUserOrder(orderId);
+      if (!res.success) {
+        alert(res.error || "İptal başarısız");
+        return;
+      }
+      await refreshOrdersAndDetail(orderId);
+    } finally {
+      setOrderCancelSubmitting(false);
+    }
+  };
+
   const handleSaveAddress = async () => {
     if (!addrForm.contactName || !addrForm.phone || !addrForm.addressLine1) {
       setAddrError("Lütfen tüm zorunlu alanları doldurun");
@@ -197,10 +220,11 @@ export default function ProfilePage() {
   };
 
   const statusColor = (status: number) => {
+    // Önce iptal / iade / kapalı (80+) — yoksa >= 70 tamamlandıyı yeşil yapardı
+    if (status >= 80) return "#dc3545";
     if (status >= 70) return "#198754";
     if (status >= 50) return "#0d6efd";
     if (status >= 30) return "#6f42c1";
-    if (status >= 80) return "#dc3545";
     return "#6c757d";
   };
 
@@ -293,8 +317,12 @@ export default function ProfilePage() {
                       </div>
                       <div className="d-flex align-items-center gap-3">
                         <span
-                          className="badge"
-                          style={{ background: statusColor(order.orderStatus), borderRadius: 0, padding: "6px 12px" }}
+                          className="badge text-white"
+                          style={{
+                            background: statusColor(order.orderStatus),
+                            borderRadius: 0,
+                            padding: "6px 12px",
+                          }}
                         >
                           {order.orderStatusDisplay}
                         </span>
@@ -324,12 +352,21 @@ export default function ProfilePage() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {orderDetail.orderItems.map((item) => (
+                                {orderDetail.orderItems.map((item) => {
+                                  const orderLineImg = item.productImage ? getImageUrl(item.productImage) : "";
+                                  return (
                                   <tr key={item.id}>
                                     <td>
                                       <div className="d-flex align-items-center gap-2">
                                         {item.productImage && (
-                                          <Image src={getImageUrl(item.productImage)} alt={item.productName} width={40} height={50} style={{ objectFit: "cover" }} />
+                                          <Image
+                                            src={orderLineImg}
+                                            alt={item.productName}
+                                            width={40}
+                                            height={50}
+                                            style={{ objectFit: "cover" }}
+                                            unoptimized={isApiHostedMediaSrc(orderLineImg)}
+                                          />
                                         )}
                                         <Link href={`/urunler/${item.productId}`} style={{ color: "#000", textDecoration: "none" }}>{item.productName}</Link>
                                       </div>
@@ -350,9 +387,60 @@ export default function ProfilePage() {
                                       </td>
                                     )}
                                   </tr>
-                                ))}
+                                );
+                                })}
                               </tbody>
                             </table>
+                            {(orderDetail.canCancelByCustomer ||
+                              (!orderDetail.canCancelByCustomer &&
+                                orderDetail.orderStatus !== 80 &&
+                                orderDetail.supportWhatsAppDigits)) && (
+                              <div className="mb-3 p-2" style={{ background: "#fff8e6", border: "1px solid #f0e0c0" }}>
+                                {orderDetail.canCancelByCustomer && (
+                                  <>
+                                    <div className="small text-muted mb-2">
+                                      İptal son tarihi:{" "}
+                                      {orderDetail.cancellationDeadline
+                                        ? new Date(orderDetail.cancellationDeadline).toLocaleString("tr-TR")
+                                        : "—"}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-danger btn-sm"
+                                      style={{ borderRadius: 0 }}
+                                      disabled={orderCancelSubmitting}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCancelOrder(orderDetail.id);
+                                      }}
+                                    >
+                                      {orderCancelSubmitting ? "İptal ediliyor..." : "Siparişi iptal et"}
+                                    </button>
+                                  </>
+                                )}
+                                {!orderDetail.canCancelByCustomer &&
+                                  orderDetail.orderStatus !== 80 &&
+                                  orderDetail.supportWhatsAppDigits && (
+                                    <div className="d-flex flex-wrap align-items-center gap-2">
+                                      <span className="small">
+                                        Bu siparişi buradan iptal edemezsiniz. Yardım için WhatsApp üzerinden yazabilirsiniz.
+                                      </span>
+                                      <a
+                                        href={`https://wa.me/${orderDetail.supportWhatsAppDigits}?text=${encodeURIComponent(
+                                          `Merhaba, sipariş #${orderDetail.id} hakkında bilgi almak istiyorum.`
+                                        )}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-success btn-sm"
+                                        style={{ borderRadius: 0 }}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        WhatsApp
+                                      </a>
+                                    </div>
+                                  )}
+                              </div>
+                            )}
                             <div className="d-flex justify-content-between align-items-center mt-2">
                               <div>
                                 <strong>Toplam: {orderDetail.orderTotalString}</strong>
@@ -507,11 +595,19 @@ export default function ProfilePage() {
                   .filter((item) => reviewSingleProductId == null || item.productId === reviewSingleProductId)
                   .map((item) => {
                   const f = reviewForm[item.productId] ?? { rating: 5, comment: "" };
+                  const reviewThumb = item.productImage ? getImageUrl(item.productImage) : "";
                   return (
                     <div key={item.id} className="mb-4 p-3" style={{ border: "1px solid #e5e5e5" }}>
                       <div className="d-flex align-items-center gap-2 mb-2">
                         {item.productImage && (
-                          <Image src={getImageUrl(item.productImage)} alt={item.productName} width={40} height={50} style={{ objectFit: "cover" }} />
+                          <Image
+                            src={reviewThumb}
+                            alt={item.productName}
+                            width={40}
+                            height={50}
+                            style={{ objectFit: "cover" }}
+                            unoptimized={isApiHostedMediaSrc(reviewThumb)}
+                          />
                         )}
                         <strong>{item.productName}</strong>
                       </div>

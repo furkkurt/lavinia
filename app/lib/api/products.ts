@@ -1,4 +1,21 @@
-import { apiFetch, apiFetchMultipart, API_BASE_URL } from './config';
+import { apiFetch, apiFetchMultipart, PUBLIC_ASSET_BASE_URL } from './config';
+
+/** Public API dizisi veya admin ham string (JSON / virgülle ayrılmış) → etiket listesi */
+export function parseCustomerOptions(raw: string | string[] | undefined | null): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map((s) => String(s).trim()).filter(Boolean);
+  const t = String(raw).trim();
+  if (!t) return [];
+  if (t.startsWith('[')) {
+    try {
+      const j = JSON.parse(t) as unknown;
+      if (Array.isArray(j)) return j.map((x) => String(x).trim()).filter(Boolean);
+    } catch {
+      /* fall through */
+    }
+  }
+  return t.split(/[,;\n\r]+/).map((s) => s.trim()).filter(Boolean);
+}
 
 export interface Product {
   id: number;
@@ -27,11 +44,22 @@ export interface Product {
   thumbnailImage?: File;
   brandId?: number;
   categoryIds?: number[];
+  /** Public GetProduct: mediaUrl = küçük, originalUrl = tam (Core MediaService). */
   productImages?: Array<{
     id?: number;
+    mediaUrl?: string;
+    originalUrl?: string;
     imageUrl?: string;
     image?: File;
   }>;
+  /** Mağaza: çözümlenmiş beden listesi. Admin form: virgül/JSON string veya dizi. */
+  customerSizeOptions?: string[] | string;
+  /** Mağaza: renk listesi (boşsa renk yok). Admin: virgül/JSON string veya dizi. Matris varsa API renkleri matristen döner. */
+  customerColorOptions?: string[] | string;
+  /** Public GET: renk × beden stok (API camelCase). */
+  customerVariantStock?: { colors: Array<{ name: string; stocks: Record<string, number> }> } | null;
+  /** Admin FormData: JSON string şema <c>{"colors":[{"name":"...","stocks":{"S":1}}]}</c> */
+  customerVariantStockJson?: string;
 }
 
 export interface ProductGridParams {
@@ -146,6 +174,20 @@ export async function getProduct(id: number): Promise<Product | null> {
   return response.data || null;
 }
 
+/** Admin ürün düzenleme: ham JSON + tüm alanlar (Bearer). Public GET yayında olmayan ürünü vermez. */
+export async function getProductAdmin(id: number): Promise<Product | null> {
+  const response = await apiFetch<Product>(`/api/products/${id}`);
+
+  if (response.error) {
+    if (response.status !== 401 && response.status !== 404) {
+      console.error("Error fetching product (admin):", response.error);
+    }
+    return null;
+  }
+
+  return response.data || null;
+}
+
 // Get image filenames from productImages/{id}/ folder (fallback when product has no media)
 export async function getProductLocalImages(productId: number): Promise<string[]> {
   const response = await apiFetch<{ files: string[] }>(`/api/public/products/${productId}/local-images`);
@@ -153,9 +195,13 @@ export async function getProductLocalImages(productId: number): Promise<string[]
   return response.data.files;
 }
 
-// Build full URL for a local product image
+/**
+ * Yerel `productImages/{id}/` dosyası için tam URL.
+ * Ayrı `_thumb` dosyası yok; galeride önizleme ve ana görsel aynı kaynağı kullanır (API thumb veya resize ayrı eklenebilir).
+ */
 export function getProductLocalImageUrl(productId: number, filename: string): string {
-  return `${API_BASE_URL}/product-images/${productId}/${encodeURIComponent(filename)}`;
+  const base = PUBLIC_ASSET_BASE_URL;
+  return `${base}/product-images/${productId}/${encodeURIComponent(filename)}`;
 }
 
 // Create product
@@ -190,6 +236,15 @@ export async function createProduct(product: Partial<Product>): Promise<Product 
   if (product.metaTitle) formData.append('Product.MetaTitle', product.metaTitle);
   if (product.metaKeywords) formData.append('Product.MetaKeywords', product.metaKeywords);
   if (product.metaDescription) formData.append('Product.MetaDescription', product.metaDescription);
+  if (typeof product.customerSizeOptions === 'string' && product.customerSizeOptions.length > 0) {
+    formData.append('Product.CustomerSizeOptions', product.customerSizeOptions);
+  }
+  if (typeof product.customerColorOptions === 'string' && product.customerColorOptions.length > 0) {
+    formData.append('Product.CustomerColorOptions', product.customerColorOptions);
+  }
+  if (typeof product.customerVariantStockJson === 'string' && product.customerVariantStockJson.length > 0) {
+    formData.append('Product.CustomerVariantStockJson', product.customerVariantStockJson);
+  }
 
   // Add images
   if (product.thumbnailImage instanceof File) {
@@ -245,6 +300,26 @@ export async function updateProduct(id: number, product: Partial<Product>): Prom
   if (product.metaTitle !== undefined) formData.append('Product.MetaTitle', product.metaTitle);
   if (product.metaKeywords !== undefined) formData.append('Product.MetaKeywords', product.metaKeywords);
   if (product.metaDescription !== undefined) formData.append('Product.MetaDescription', product.metaDescription);
+  const sizeOpt =
+    product.customerSizeOptions === undefined
+      ? undefined
+      : Array.isArray(product.customerSizeOptions)
+        ? product.customerSizeOptions.join(', ')
+        : String(product.customerSizeOptions);
+  const colorOpt =
+    product.customerColorOptions === undefined
+      ? undefined
+      : Array.isArray(product.customerColorOptions)
+        ? product.customerColorOptions.join(', ')
+        : String(product.customerColorOptions);
+  if (sizeOpt !== undefined) formData.append('Product.CustomerSizeOptions', sizeOpt);
+  if (colorOpt !== undefined) formData.append('Product.CustomerColorOptions', colorOpt);
+  if (product.customerVariantStockJson !== undefined) {
+    formData.append(
+      'Product.CustomerVariantStockJson',
+      product.customerVariantStockJson || ''
+    );
+  }
 
   if (product.thumbnailImage instanceof File) {
     formData.append('ThumbnailImage', product.thumbnailImage);

@@ -2,14 +2,23 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import Script from "next/script";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SvgSprite from "../components/SvgSprite";
-import { createCheckout, getCheckoutSummary, completeCheckout, CheckoutSummary } from "../lib/api/checkout";
+import {
+  createCheckout,
+  getCheckoutSummary,
+  completeCheckout,
+  preparePayTrCheckout,
+  CheckoutSummary,
+} from "../lib/api/checkout";
 import { getAddresses, createAddress, UserAddress, AddressFormData, getStates } from "../lib/api/addresses";
-import { getImageUrl, getAuthToken } from "../lib/api/config";
+import { getImageUrl, getAuthToken, isApiHostedMediaSrc } from "../lib/api/config";
+import { getEmailFromAuthToken } from "../lib/api/auth";
+import { getPublicShop } from "../lib/api/shop";
 
 type Step = "address" | "summary" | "success";
 
@@ -34,6 +43,9 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState<number | null>(null);
   const [orderTotal, setOrderTotal] = useState("");
   const [provinces, setProvinces] = useState<{ id: number; name: string }[]>([]);
+  /** PayTR iFrame API: get-token sonrası `/odeme/guvenli/{token}` */
+  const [paytrIframeToken, setPaytrIframeToken] = useState<string | null>(null);
+  const [payEmail, setPayEmail] = useState("");
 
   useEffect(() => {
     const preloader = document.querySelector(".preloader");
@@ -41,10 +53,35 @@ export default function CheckoutPage() {
     init();
   }, []);
 
+  useEffect(() => {
+    if (step !== "summary" || typeof window === "undefined") return;
+    if (!getAuthToken()) return;
+    let fromStorage: string | null = null;
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        const u = JSON.parse(raw) as { email?: string };
+        if (u.email && typeof u.email === "string") fromStorage = u.email;
+      }
+    } catch {
+      /* ignore */
+    }
+    const email = getEmailFromAuthToken() || fromStorage;
+    if (email) {
+      setPayEmail((prev) => (prev.trim() ? prev : email));
+    }
+  }, [step]);
+
   const isGuest = typeof window !== "undefined" && !getAuthToken();
 
   const init = async () => {
     setLoading(true);
+    const shop = await getPublicShop();
+    if (!shop.salesEnabled) {
+      router.replace("/sepet");
+      setLoading(false);
+      return;
+    }
     try {
       const states = await getStates("TR");
       setProvinces(states);
@@ -108,6 +145,7 @@ export default function CheckoutPage() {
     setCheckoutId(result.checkoutId);
     const summaryData = await getCheckoutSummary(result.checkoutId);
     setSummary(summaryData);
+    setPaytrIframeToken(null);
     setStep("summary");
     setSubmitting(false);
   };
@@ -138,6 +176,72 @@ export default function CheckoutPage() {
     }
     setSubmitting(false);
   };
+
+  const handlePayWithPaytr = async () => {
+    if (!checkoutId) return;
+    const email = payEmail.trim();
+    if (!email || !email.includes("@")) {
+      setError("PayTR için geçerli bir e-posta girin.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+
+    const prep = isGuest
+      ? await preparePayTrCheckout(checkoutId, {
+          email,
+          shippingAddressId: 0,
+          orderNote,
+          guestShippingAddress: {
+            contactName: newAddress.contactName,
+            phone: newAddress.phone,
+            addressLine1: newAddress.addressLine1,
+            addressLine2: newAddress.addressLine2,
+            city: newAddress.city || "",
+            zipCode: newAddress.zipCode,
+            stateOrProvinceId: newAddress.stateOrProvinceId,
+            countryId: newAddress.countryId || "TR",
+          },
+        })
+      : await preparePayTrCheckout(checkoutId, {
+          email,
+          shippingAddressId: selectedAddressId,
+          orderNote,
+        });
+
+    if (!prep.success) {
+      setError(prep.error || "Ödeme hazırlığı başarısız.");
+      setSubmitting(false);
+      return;
+    }
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const token = getAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    try {
+      const res = await fetch("/api/paytr-token", {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: JSON.stringify({ checkoutId }),
+      });
+      const data = (await res.json()) as { token?: string; error?: string };
+      if (!res.ok || !data.token) {
+        setError(data.error || "PayTR ödeme oturumu açılamadı.");
+        setSubmitting(false);
+        return;
+      }
+      setPaytrIframeToken(data.token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ağ hatası.");
+    }
+    setSubmitting(false);
+  };
+
+  const paytrIframeSrc = paytrIframeToken
+    ? `https://www.paytr.com/odeme/guvenli/${paytrIframeToken}`
+    : "";
 
   const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
   const displayAddr = isGuest ? { contactName: newAddress.contactName, phone: newAddress.phone, addressLine1: newAddress.addressLine1, city: newAddress.city, stateOrProvinceName: "" } : selectedAddr;
@@ -350,28 +454,45 @@ export default function CheckoutPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.items.map((item) => (
+                    {summary.items.map((item) => {
+                      const payLineImg = getImageUrl(item.productImage);
+                      return (
                       <tr key={item.productId}>
                         <td>
                           <div className="d-flex align-items-center gap-2">
                             <Image
-                              src={getImageUrl(item.productImage)}
+                              src={payLineImg}
                               alt={item.productName}
                               width={50}
                               height={60}
                               style={{ objectFit: "cover" }}
+                              unoptimized={isApiHostedMediaSrc(payLineImg)}
                               onError={(e) => { (e.target as HTMLImageElement).src = '/images/product-item-1.jpg'; }}
                             />
                             <span>{item.productName}</span>
                           </div>
                         </td>
                         <td>{item.quantity}</td>
-                        <td>{item.totalString}</td>
+                        <td>{item.totalString}                        </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               )}
+
+              <div className="mb-3">
+                <label className="form-label">E-posta (PayTR / bildirim) *</label>
+                <input
+                  type="email"
+                  className="form-control"
+                  style={{ borderRadius: 0 }}
+                  value={payEmail}
+                  onChange={(e) => setPayEmail(e.target.value)}
+                  placeholder="ornek@eposta.com"
+                  autoComplete="email"
+                />
+              </div>
 
               <div className="mb-3">
                 <label className="form-label">Sipariş Notu (isteğe bağlı)</label>
@@ -384,6 +505,41 @@ export default function CheckoutPage() {
                   placeholder="Siparişinizle ilgili bir not ekleyebilirsiniz..."
                 />
               </div>
+
+              {paytrIframeToken && (
+                <div className="mb-4 p-3" style={{ border: "1px solid #e5e5e5" }}>
+                  <h5 style={{ fontFamily: "var(--font-marcellus)", marginBottom: "16px" }}>
+                    Güvenli ödeme (PayTR)
+                  </h5>
+                  <p className="small text-muted mb-3">
+                    Kart bilgilerinizi aşağıdaki pencerede PayTR üzerinden girersiniz.
+                  </p>
+                  <iframe
+                    id="paytriframe"
+                    title="PayTR ödeme"
+                    src={paytrIframeSrc}
+                    frameBorder={0}
+                    scrolling="no"
+                    style={{ width: "100%", minHeight: "480px", border: "none" }}
+                  />
+                  <Script
+                    src="https://www.paytr.com/js/iframeResizer.min.js"
+                    strategy="afterInteractive"
+                    onLoad={() => {
+                      window.setTimeout(() => {
+                        const ir = (
+                          window as unknown as { iFrameResize?: (opts: object, sel: string) => void }
+                        ).iFrameResize;
+                        try {
+                          ir?.({}, "#paytriframe");
+                        } catch {
+                          /* ignore */
+                        }
+                      }, 0);
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="col-lg-4">
@@ -418,25 +574,45 @@ export default function CheckoutPage() {
                 )}
 
                 <div className="p-3 mt-3 mb-3" style={{ background: "#f8f9fa", border: "1px solid #e5e5e5" }}>
-                  <small className="text-muted">Ödeme Yöntemi</small>
-                  <div className="fw-bold mt-1">Kapıda Ödeme (Mock)</div>
+                  <small className="text-muted d-block mb-2">Ödeme yöntemi</small>
+                  <div className="small text-muted mb-2">
+                    PayTR ile güvenli kart ödemesi; veya kapıda ödeme (anında sipariş).
+                  </div>
                 </div>
 
                 <button
                   className="btn btn-dark w-100"
-                  style={{ borderRadius: 0, padding: "14px", fontSize: "15px", letterSpacing: "1px" }}
-                  onClick={handleComplete}
-                  disabled={submitting}
+                  style={{ borderRadius: 0, padding: "14px", fontSize: "14px", letterSpacing: "0.5px" }}
+                  onClick={handlePayWithPaytr}
+                  disabled={submitting || !!paytrIframeToken}
                 >
-                  {submitting ? "İşleniyor..." : "SİPARİŞİ ONAYLA"}
+                  {submitting && !paytrIframeToken
+                    ? "Hazırlanıyor..."
+                    : paytrIframeToken
+                      ? "Ödeme penceresi açık"
+                      : "KART İLE ÖDE (PayTR)"}
                 </button>
+
                 <button
                   className="btn btn-outline-dark w-100 mt-2"
-                  style={{ borderRadius: 0, padding: "12px" }}
-                  onClick={() => setStep("address")}
+                  style={{ borderRadius: 0, padding: "14px", fontSize: "14px", letterSpacing: "0.5px" }}
+                  onClick={handleComplete}
+                  disabled={submitting || !!paytrIframeToken}
+                >
+                  {submitting ? "İşleniyor..." : "KAPIDA ÖDEME — SİPARİŞİ ONAYLA"}
+                </button>
+
+                <button
+                  className="btn btn-link text-muted w-100 mt-2 p-0 small"
+                  style={{ textDecoration: "none" }}
+                  type="button"
+                  onClick={() => {
+                    setPaytrIframeToken(null);
+                    setStep("address");
+                  }}
                   disabled={submitting}
                 >
-                  Geri Dön
+                  Geri dön
                 </button>
               </div>
             </div>

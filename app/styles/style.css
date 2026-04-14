@@ -294,20 +294,35 @@ a {
   transition: background-color 0.6s ease-out;
 }
 
-  /* Offcanvas - Ensure proper positioning and visibility */
+  /* Offcanvas — placement’a göre gizle; tek translateX(100%) offcanvas-start’ı bozar (soldan menü sağa kaçar) */
   .offcanvas {
     position: fixed !important;
     z-index: 1045 !important;
   }
 
-  .offcanvas:not(.show) {
+  .offcanvas.offcanvas-end:not(.show) {
     visibility: hidden !important;
     transform: translateX(100%) !important;
   }
 
+  .offcanvas.offcanvas-start:not(.show) {
+    visibility: hidden !important;
+    transform: translateX(-100%) !important;
+  }
+
+  .offcanvas.offcanvas-top:not(.show) {
+    visibility: hidden !important;
+    transform: translateY(-100%) !important;
+  }
+
+  .offcanvas.offcanvas-bottom:not(.show) {
+    visibility: hidden !important;
+    transform: translateY(100%) !important;
+  }
+
   .offcanvas.show {
     visibility: visible !important;
-    transform: translateX(0) !important;
+    transform: translate(0, 0) !important;
   }
 
   .offcanvas-backdrop {
@@ -361,9 +376,11 @@ a {
     height: 16px;
   }
 
-  /* Mega Menu Styles */
-  .mega-menu-wrapper {
-    position: static;
+  /* Mega Menu Styles — wrapper relative olmalı; static olursa panel .navbar’a göre hizalanıp sola kayar */
+  @media (min-width: 1200px) {
+    .navbar.navbar-expand-xl li.mega-menu-wrapper {
+      position: relative;
+    }
   }
 
   .mega-menu {
@@ -3128,40 +3145,54 @@ section.testimonials.section-spacing.bg-light {
   padding: 0.5rem 1.25rem;
 }
 
-/* Anasayfa kategoriler: mobilde 2 sütun + daha kısa görsel oranı; md+ 9/16 */
-.home-categories .home-category-image-wrap {
-  aspect-ratio: 4 / 5;
-}
-
-@media (min-width: 768px) {
-  .home-categories .home-category-image-wrap {
-    aspect-ratio: 9 / 16;
-  }
-}
-
 /* Başlık satırı: dekor metin + erişilebilir h2 */
 .collection-heading-row {
   padding-top: 0.5rem;
   margin-bottom: 0.25rem;
 }
 
-.home-categories .home-categories-title-bg.title-xlarge {
-  font-size: clamp(2rem, 12vw, 4.5rem);
-  top: 0;
-  left: 0;
-  line-height: 1;
-  pointer-events: none;
-  z-index: 0;
+/* Kategoriler: iki başlık üst üste, sola hizalı; arka yalnızca mavi dolgu (stroke yok) */
+.home-categories .home-categories-heading.collection-heading-row {
+  text-align: start;
+  min-height: clamp(3.5rem, 14vw, 5.5rem);
+  margin-bottom: clamp(1rem, 3vw, 1.75rem);
+  padding-top: 0.25rem;
 }
 
-.home-categories .collection-heading-row .section-title {
+.home-categories .home-categories-title-bg.title-xlarge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: auto;
+  width: 100%;
+  text-align: start;
+  font-size: clamp(2.25rem, 10vw, 4rem);
+  line-height: 0.95;
+  pointer-events: none;
+  z-index: 0;
+  color: rgba(72, 118, 168, 0.28);
+}
+
+.home-categories .collection-heading-row .section-title,
+.home-categories .home-categories-title-front {
   z-index: 1;
+  position: relative;
+  text-align: start;
+  font-size: clamp(1.35rem, 4.2vw, 2.05rem) !important;
+  letter-spacing: 0.06em;
+  margin-top: clamp(0.55rem, 2.2vw, 1.1rem);
+  margin-bottom: 0;
 }
 
 @media (min-width: 768px) {
   .home-categories .home-categories-title-bg.title-xlarge {
-    font-size: clamp(2.5rem, 8vw, 5.5rem);
-    top: -0.25rem;
+    font-size: clamp(2.75rem, 7vw, 4.75rem);
+    top: -0.05rem;
+  }
+
+  .home-categories .home-categories-title-front {
+    font-size: clamp(1.5rem, 2.8vw, 2.15rem) !important;
+    margin-top: clamp(0.65rem, 1.8vw, 1.15rem);
   }
 }
 
@@ -3203,28 +3234,22 @@ section.testimonials.section-spacing.bg-light {
   }
 }
 
-/* Global @media (max-width: 991px) .collection-item { flex-direction: column } anasayfa grid’ini bozmasın */
+/* Anasayfa kategoriler: yeni dikey kart (.home-category-card-v); eski yatay .collection-item kullanılmıyor */
 @media only screen and (max-width: 991px) {
-  .home-categories .collection-item.row {
-    flex-direction: row !important;
-    flex-wrap: wrap !important;
-  }
-
-  .home-categories .collection-content {
-    padding: 0.65rem 0.45rem !important;
+  .home-categories .home-category-card-v__body {
+    padding: 0.75rem 0.65rem !important;
   }
 }
 
 @media only screen and (min-width: 768px) and (max-width: 991px) {
-  .home-categories .collection-content {
+  .home-categories .home-category-card-v__body {
     padding: 1rem !important;
   }
 }
 
-/* Mobil/tablet genel .title-xlarge !important üzerine */
 @media only screen and (max-width: 991px) {
   .home-categories .home-categories-title-bg.title-xlarge {
-    font-size: clamp(2rem, 11vw, 3.75rem) !important;
+    font-size: clamp(2rem, 9vw, 3.25rem) !important;
   }
 }
 
@@ -3282,11 +3307,6 @@ html, body {
   transform: scale(1.05);
 }
 
-/* home-categories: rounded-1 ile uyum (üst köşe radius) */
-.home-categories .column-container .image-holder {
-  border-radius: 0.25rem 0.25rem 0 0;
-}
-
 /* Better button hover states */
 .btn-dark:hover {
   background-color: #000 !important;
@@ -3341,8 +3361,8 @@ html, body {
     margin-bottom: 1.5rem;
   }
 
-  .home-categories .column-container {
-    margin-bottom: 0.75rem;
+  .home-categories .home-categories-grid > [class*="col-"] {
+    margin-bottom: 0;
   }
 
   .collection .collection-content h3 {
@@ -3354,13 +3374,14 @@ html, body {
     padding: 0.4rem 1rem !important;
   }
 
-  .home-categories .collection-content h3 {
-    font-size: 1rem !important;
+  .home-categories .home-category-card-v__title {
+    font-size: clamp(0.78rem, 3.2vw, 0.95rem) !important;
   }
 
-  .home-categories .collection-content .btn {
-    font-size: 0.75rem !important;
-    padding: 0.35rem 0.65rem !important;
+  .home-categories .home-category-card-v .btn {
+    font-size: 0.78rem !important;
+    padding: 0.45rem 0.9rem !important;
+    min-height: 44px;
   }
 
   /* Testimonials mobile */
@@ -3422,8 +3443,8 @@ html, body {
     padding: 0.75rem !important;
   }
 
-  .home-categories .collection-content {
-    padding: 0.5rem 0.4rem !important;
+  .home-categories .home-category-card-v__body {
+    padding: 0.55rem 0.45rem !important;
   }
 
   .collection .collection-content h3 {
@@ -3593,4 +3614,140 @@ main, section {
 }
 .product-content .link-effect:hover a[data-after]::after {
   transform: translate(-50%, 0%);
+}
+
+/* —— Ana sayfa: ürün şeritleri aralığı, kategori kartı v2, bülten, Instagram —— */
+.product-carousel .section-spacing {
+  padding-top: clamp(2.25rem, 5.5vw, 3.75rem);
+  padding-bottom: clamp(2rem, 4.5vw, 3.25rem);
+}
+
+.product-carousel-title {
+  line-height: 1.2;
+}
+
+.product-carousel .product-content {
+  min-height: 4.5rem;
+}
+
+.product-carousel .product-content .element-title {
+  min-height: 2.6em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+/* Kategori kartları: üst görsel, orta başlık, altta buton; eşit yükseklik */
+.home-categories-heading {
+  margin-bottom: clamp(1.25rem, 3vw, 2rem);
+}
+
+.home-category-card-v {
+  min-height: 100%;
+}
+
+.home-category-card-v__media {
+  aspect-ratio: 4 / 5;
+  min-height: 10rem;
+}
+
+.home-category-fade-viewport--card {
+  min-height: 0;
+  height: 100%;
+}
+
+.home-category-card-v__title {
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-height: 1.3;
+  font-size: clamp(0.8rem, 2.8vw, 1rem) !important;
+}
+
+.home-newsletter__lead {
+  max-width: 40rem;
+}
+
+.home-newsletter__form {
+  width: 100%;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.home-newsletter__input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  max-height: 48px;
+  padding: 0.5rem 0.85rem;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.home-newsletter__submit {
+  min-height: 44px;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+@media (min-width: 576px) {
+  .home-newsletter__input {
+    min-height: 46px;
+    max-height: none;
+    padding: 0.55rem 1rem;
+    font-size: 1.05rem;
+  }
+
+  .home-newsletter__submit {
+    min-height: 46px;
+  }
+}
+
+@media (min-width: 576px) {
+  .home-newsletter__form {
+    max-width: 48rem;
+  }
+}
+
+/* Instagram: zoom / koyu hover yok; mobilde buton akışta — footer çakışması önlenir */
+.instagram-home .insta-item--static,
+.instagram-home .insta-item--static:hover {
+  transform: none;
+}
+
+.instagram-home .insta-item--static .image-holder,
+.instagram-home .insta-item--static:hover .image-holder {
+  transform: none !important;
+}
+
+.instagram-home .insta-item a::after,
+.instagram-home .insta-item a:hover::after {
+  display: none !important;
+  content: none !important;
+  opacity: 0 !important;
+}
+
+@media (max-width: 991.98px) {
+  .instagram-home {
+    padding-bottom: 0.5rem !important;
+    overflow: hidden;
+  }
+
+  .instagram-home .instagram-button-overlay {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    z-index: 1;
+    padding: 1rem 0.75rem 1.5rem;
+  }
+
+  .instagram-home .instagram-follow-btn {
+    opacity: 1;
+  }
 }

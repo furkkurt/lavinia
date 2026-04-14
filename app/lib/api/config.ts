@@ -1,53 +1,77 @@
 /**
- * API kök URL’i.
- * - Üretimde birçok sunucuda 5000 portu dışarı kapalıdır; tarayıcı `hostname:5000` ile ERR_CONNECTION_REFUSED verir.
- * - Çözüm: `lavinia/.env.production` içinde `NEXT_PUBLIC_API_BASE_URL` tanımlayın veya 80/443 önünde nginx ile `/api` proxy kullanın.
+ * Tarayıcıya / HTML’e yazılacak medya yolları için taban (SSR dahil).
+ * `API_INTERNAL_URL` (127.0.0.1) burada kullanılmaz — yoksa canlı sitede ziyaretçi tarayıcısı loopback’e istek atar.
  */
-function resolveApiBaseUrl(): string {
+function resolvePublicAssetBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_API_BASE_URL;
-  // Tanımlı ve boş string = bilinçli "aynı origin" (nginx /api proxy)
-  if (explicit !== undefined) {
-    if (explicit === "") return "";
+  if (explicit !== undefined && explicit.trim() !== "") {
     return explicit.replace(/\/$/, "");
   }
+  return "";
+}
 
+/**
+ * `fetch()` tabanı: istemcide "" (aynı origin); Node’da `API_INTERNAL_URL` (Kestrel’e doğrudan).
+ */
+function resolveFetchApiBaseUrl(): string {
+  const pub = resolvePublicAssetBaseUrl();
+  if (pub) return pub;
   if (typeof window !== "undefined") {
-    const { hostname, port } = window.location;
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return "http://localhost:5000";
-    }
-
-    // Doğrudan Next (PM2) :3000 — API genelde Docker’da :5000 (firewall açık olmalı)
-    if (port === "3000") {
-      return `http://${hostname}:5000`;
-    }
-
-    // 80 / 443 / boş port → aynı origin; nginx/Caddy’nin /api, /user-content, /product-images proxy etmesi gerekir
     return "";
   }
-
-  return "http://localhost:5000";
+  return (process.env.API_INTERNAL_URL || "http://127.0.0.1:5000").replace(/\/$/, "");
 }
-export const API_BASE_URL = resolveApiBaseUrl();
+
+/** API `fetch` / `apiFetch` — sunucu içi adres. */
+export const API_BASE_URL = resolveFetchApiBaseUrl();
+
+/** img `src` ve ziyaretçiye görünen göreli tamamlayıcı (çoğunlukla ""). */
+export const PUBLIC_ASSET_BASE_URL = resolvePublicAssetBaseUrl();
+
+function stripLoopbackAbsolute(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
+      const path = `${u.pathname}${u.search}${u.hash}`;
+      return path.length > 0 ? path : "/";
+    }
+  } catch {
+    /* ignore */
+  }
+  return url;
+}
 
 // Helper function to get full image URL from backend
 export function getImageUrl(imagePath: string | undefined | null): string {
   if (!imagePath) {
-    return '/images/product-item-1.jpg';
+    return "/images/product-item-1.jpg";
   }
-  
-  // If it's already a full URL, return as is
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-    return imagePath;
+
+  const base = PUBLIC_ASSET_BASE_URL;
+
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    return stripLoopbackAbsolute(imagePath);
   }
-  
-  // If it starts with /, it's a backend path - prepend API base URL
-  if (imagePath.startsWith('/')) {
-    return `${API_BASE_URL}${imagePath}`;
+
+  /* Next `public/` — önek yok */
+  if (imagePath.startsWith("/images/") || imagePath.startsWith("/icons/") || imagePath.startsWith("/favicon")) {
+    return imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
   }
-  
-  // Otherwise, assume it's a relative path from backend
-  return `${API_BASE_URL}/${imagePath}`;
+
+  if (imagePath.startsWith("/")) {
+    return `${base}${imagePath}`;
+  }
+
+  return `${base}/${imagePath}`;
+}
+
+/**
+ * Media under these paths is served by the API (or nginx → API), not by the Next.js server.
+ * The default `next/image` optimizer fetches from the Next origin and gets 404/400 — bypass with `unoptimized`.
+ */
+export function isApiHostedMediaSrc(src: string | undefined | null): boolean {
+  if (!src) return false;
+  return src.includes("/user-content/") || src.includes("/product-images/");
 }
 
 export interface ApiResponse<T> {
@@ -79,7 +103,7 @@ function cleanupPendingRequests() {
 // Helper function to get auth token from localStorage
 export const getAuthToken = (): string | null => {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('authToken');
+    return localStorage.getItem('authToken') || localStorage.getItem('access_token');
   }
   return null;
 };
@@ -95,6 +119,7 @@ export const setAuthToken = (token: string): void => {
 export const removeAuthToken = (): void => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('access_token');
   }
 };
 
@@ -138,24 +163,17 @@ export async function apiFetch<T>(
       credentials: 'include', // Include cookies for session-based auth
     });
 
+    const raw = await response.text();
     let data: any = {};
     const contentType = response.headers.get('content-type');
-    
-    if (contentType && contentType.includes('application/json')) {
+    if (contentType?.includes('application/json') && raw) {
       try {
-        data = await response.json();
-      } catch (e) {
-        // If JSON parsing fails, try to get text
-        const text = await response.text();
-        if (text) {
-          data = { message: text };
-        }
+        data = JSON.parse(raw) as object;
+      } catch {
+        data = { message: raw };
       }
-    } else {
-      const text = await response.text();
-      if (text) {
-        data = { message: text };
-      }
+    } else if (raw) {
+      data = { message: raw };
     }
 
     if (!response.ok) {

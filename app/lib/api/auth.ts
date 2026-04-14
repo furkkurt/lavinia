@@ -1,21 +1,5 @@
 import { API_BASE_URL, apiFetch, setAuthToken, removeAuthToken, getAuthToken } from './config';
 
-/** Validate token by calling an auth-required API. Returns false and clears localStorage on 401. */
-export async function validateToken(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-  const token = getAuthToken();
-  if (!token) return false;
-  const res = await apiFetch<unknown[]>('/api/user/orders');
-  if (res.status === 401) {
-    localStorage.removeItem('isLoggedIn');
-    removeAuthToken();
-    localStorage.removeItem('user');
-    localStorage.removeItem('adminUser');
-    return false;
-  }
-  return true;
-}
-
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -196,6 +180,33 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
   }
 }
 
+function clearAuthStorage(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('isLoggedIn');
+  removeAuthToken();
+  localStorage.removeItem('user');
+  localStorage.removeItem('adminUser');
+}
+
+/** exp varsa ve süresi dolduysa true (30 sn tolerans). */
+function isBearerExpired(token: string): boolean {
+  const payload = decodeJwtPayload(token);
+  if (!payload || typeof payload.exp !== 'number') return false;
+  return Date.now() / 1000 >= payload.exp - 30;
+}
+
+/** Email claim from current Bearer token (backend uses JwtRegisteredClaimNames.Email). */
+export function getEmailFromAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const token = getAuthToken();
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+  const email = payload.email;
+  if (typeof email === 'string' && email.trim()) return email.trim();
+  return null;
+}
+
 // Check if current user has admin role (from JWT token)
 export function isAdmin(): boolean {
   if (typeof window === 'undefined') return false;
@@ -206,6 +217,28 @@ export function isAdmin(): boolean {
   const role = payload.role;
   if (Array.isArray(role)) return role.includes('admin');
   return role === 'admin';
+}
+
+/**
+ * Oturum hâlâ geçerli mi diye hafif bir API çağrısı yapar.
+ * `GET /api/account/session` — yalnızca geçerli oturum (Bearer veya çerez) gerekir; admin rolü şartı yok (quick-search / orders gürültüsünü önler).
+ */
+export async function validateToken(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const token = getAuthToken();
+  if (!token) return false;
+  if (isBearerExpired(token)) {
+    clearAuthStorage();
+    return false;
+  }
+
+  const res = await apiFetch<{ ok?: boolean }>('/api/account/session');
+  if (res.status === 401 || res.status === 403) {
+    clearAuthStorage();
+    return false;
+  }
+  if (res.error) return false;
+  return true;
 }
 
 // Get current user from localStorage (admin or regular user)

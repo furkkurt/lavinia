@@ -10,6 +10,8 @@ export interface CartItem {
   quantity: number;
   total: number;
   totalString: string;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
 }
 
 export interface Cart {
@@ -55,10 +57,18 @@ export async function getCartCount(): Promise<number> {
   return response.data?.count || 0;
 }
 
-export async function addToCart(productId: number, quantity: number = 1): Promise<{ success: boolean; cartItemCount?: number; error?: string; requiresAuth?: boolean }> {
+export async function addToCart(
+  productId: number,
+  quantity: number = 1,
+  selectedSize?: string | null,
+  selectedColor?: string | null
+): Promise<{ success: boolean; cartItemCount?: number; error?: string; requiresAuth?: boolean }> {
+  const body: Record<string, unknown> = { productId, quantity };
+  if (selectedSize != null && selectedSize !== '') body.selectedSize = selectedSize;
+  if (selectedColor != null && selectedColor !== '') body.selectedColor = selectedColor;
   const response = await apiFetch<{ success: boolean; cartItemCount: number }>('/api/cart/add-item', {
     method: 'POST',
-    body: JSON.stringify({ productId, quantity }),
+    body: JSON.stringify(body),
   });
 
   if (response.status === 401) {
@@ -73,10 +83,14 @@ export async function addToCart(productId: number, quantity: number = 1): Promis
   return { success: true, cartItemCount: response.data?.cartItemCount };
 }
 
-export async function updateCartQuantity(productId: number, quantity: number): Promise<boolean> {
+export async function updateCartQuantity(cartItemId: number, quantity: number, productId?: number): Promise<boolean> {
   const response = await apiFetch('/api/cart/update-quantity', {
     method: 'PUT',
-    body: JSON.stringify({ productId, quantity }),
+    body: JSON.stringify({
+      cartItemId,
+      quantity,
+      ...(productId != null ? { productId } : {}),
+    }),
   });
   if (!response.error) {
     dispatchCartUpdate();
@@ -85,8 +99,8 @@ export async function updateCartQuantity(productId: number, quantity: number): P
   return false;
 }
 
-export async function removeFromCart(productId: number): Promise<boolean> {
-  const response = await apiFetch(`/api/cart/remove-item/${productId}`, {
+export async function removeFromCart(cartItemId: number): Promise<boolean> {
+  const response = await apiFetch(`/api/cart/remove-item/${cartItemId}`, {
     method: 'DELETE',
   });
   if (!response.error) {

@@ -1,7 +1,8 @@
 "use client";
 
-import AOSInit from "./AOSInit";
+import BootstrapInit from "./BootstrapInit";
 
+/** @deprecated Prefer root `Providers` (Bootstrap + AOS). Kept for any legacy imports. */
 export default function ClientScripts() {
-  return <AOSInit />;
+  return <BootstrapInit />;
 }

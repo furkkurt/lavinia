@@ -47,6 +47,13 @@ export interface OrderDetail {
     zipCode?: string;
   };
   orderItems: OrderItemDetail[];
+  /** Müşteri iptali: dakika cinsinden pencere (API) */
+  customerCancellationMinutes?: number;
+  /** Sadece rakamlar, wa.me için */
+  supportWhatsAppDigits?: string;
+  /** ISO-8601 son iptal anı */
+  cancellationDeadline?: string;
+  canCancelByCustomer?: boolean;
 }
 
 export interface OrderItemDetail {
@@ -63,7 +70,7 @@ export interface OrderItemDetail {
   taxAmount: number;
 }
 
-// User-facing order APIs
+// User-facing order APIs (backend [Authorize] + Bearer; 401 = giriş yok / süresi dolmuş token / issuer uyumsuz)
 export async function getUserOrders(): Promise<OrderListItem[]> {
   const response = await apiFetch<OrderListItem[]>('/api/user/orders');
   return response.data || [];
@@ -73,6 +80,17 @@ export async function getUserOrder(id: number): Promise<OrderDetail | null> {
   const response = await apiFetch<OrderDetail>(`/api/user/orders/${id}`);
   if (response.error) return null;
   return response.data || null;
+}
+
+export async function cancelUserOrder(id: number): Promise<{ success: boolean; error?: string }> {
+  const response = await apiFetch<{ message?: string }>(`/api/user/orders/${id}/cancel`, {
+    method: "POST",
+    body: "{}",
+  });
+  if (response.error) {
+    return { success: false, error: response.error };
+  }
+  return { success: true };
 }
 
 // Admin order APIs

@@ -1,60 +1,275 @@
-@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Marcellus&display=swap");
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --collections-bg: #f5f3ef;
+  --collections-ink: #1a1a1a;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-jost);
-  --font-mono: var(--font-marcellus);
-}
+/* Kaira şablonuyla uyumlu tipografi / Bootstrap tema değişkenleri (style.css import edilmeden) */
+body {
+  margin: 0;
+  --heading-font: "Marcellus", Roboto, sans-serif;
+  --heading-font-weight: 400;
+  --heading-color: #111;
+  --heading-line-height: 1.24;
+  --light-color: #f1f1f0;
+  --swiper-theme-color: #8c907e;
 
-/* Anasayfa kategori kartı — görsel değişiminde yumuşak giriş */
-@keyframes homeCategoryThumbEnter {
-  from {
-    opacity: 0;
-    transform: scale(1.07);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
+  --bs-body-font-family: "Jost", Roboto, sans-serif;
+  --bs-body-font-size: 18px;
+  --bs-body-font-weight: 400;
+  --bs-body-line-height: 1.5;
+  --bs-body-color: #8f8f8f;
+  --bs-body-color-rgb: 143, 143, 143;
+  --bs-primary: #8c907e;
+  --bs-link-color: #111;
+  --bs-link-hover-color: #111;
 
-.home-category-thumb-animate {
-  animation: homeCategoryThumbEnter 0.78s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* Mağaza mega menü — Diğer (alt kategorisi olmayan) ayrı buton */
-.mega-menu-diger-btn {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 0.85rem 1.1rem;
-  border: 2px solid #212529;
-  color: #212529;
+  font-family: var(--bs-body-font-family);
+  font-size: var(--bs-body-font-size);
+  color: var(--bs-body-color);
   background: #fff;
-  text-decoration: none;
+  letter-spacing: 0.03rem;
+}
+
+h1,
+.h1,
+h2,
+.h2,
+h3,
+.h3,
+h4,
+.h4,
+h5,
+.h5,
+h6,
+.h6 {
+  font-family: var(--heading-font);
+  font-weight: var(--heading-font-weight);
+  color: var(--heading-color);
+  line-height: var(--heading-line-height);
+}
+
+.collections-section {
+  background: var(--collections-bg);
+  padding: clamp(2.75rem, 6vw, 4rem) 1.25rem clamp(2.25rem, 5vw, 3rem);
+}
+
+.collections-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.collections-title {
+  text-align: center;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  margin: 0 0 1rem;
+}
+
+.collections-intro {
+  text-align: center;
+  max-width: 36rem;
+  margin: 0 auto clamp(1.75rem, 4vw, 2.75rem);
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: #444;
+}
+
+/* 1–3 kart: ortalanır; tek kartta dar sütun */
+.collections-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: clamp(1.25rem, 4vw, 2.5rem);
+  width: 100%;
+}
+
+.collections-grid > article {
+  flex: 0 1 min(100%, 20rem);
+  max-width: min(100%, 22.5rem);
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .collections-grid > article {
+    flex: 0 1 20rem;
+    max-width: min(100%, 22.5rem);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .collections-grid {
+    display: none;
+  }
+}
+
+.collections-card-img {
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  object-fit: cover;
+  display: block;
+  background: #e8e6e1;
+}
+
+.collections-card-title {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  line-height: 1.35;
+}
+
+.collections-card-desc {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #333;
+}
+
+.collections-cta-link {
   font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  transition:
-    background-color 0.28s ease,
-    color 0.28s ease,
-    border-color 0.28s ease,
-    transform 0.28s ease,
-    box-shadow 0.28s ease;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  color: inherit;
 }
 
-.mega-menu-diger-btn:hover {
-  background: #212529;
-  color: #fff;
-  border-color: #212529;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+.collections-view-all {
+  display: block;
+  text-align: center;
+  margin-top: 2.5rem;
+}
+
+.collections-view-all a {
+  display: inline-block;
+  padding: 0.65rem 1.75rem;
+  border: 1px solid var(--collections-ink);
+  text-decoration: none;
+  color: var(--collections-ink);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.collections-swiper-wrap {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .collections-swiper-wrap {
+    display: none;
+  }
+}
+
+.collections-swiper-wrap .swiper-pagination-bullet-active {
+  background: var(--collections-ink);
+}
+
+/* Mobil: grid gizlendiğinde kart metni Swiper içinde sola kaçıyordu */
+.collections-swiper-wrap .swiper-slide article {
+  text-align: center;
+  max-width: min(100%, 22.5rem);
+  margin-inline: auto;
+}
+
+.collections-swiper-wrap .collections-cta-link {
+  display: inline-block;
+}
+
+/* —— Navbar: MAĞAZA mega menu (full-bleed panel, hover bridge, stacking) —— */
+@media (min-width: 1200px) {
+  .navbar.navbar-expand-xl {
+    position: relative;
+    z-index: 3000;
+  }
+
+  .navbar .mega-menu-wrapper {
+    position: relative;
+  }
+
+  .navbar .mega-menu-wrapper > .mega-menu {
+    display: none;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    max-width: 100vw;
+    top: 100%;
+    z-index: 2000;
+    margin-top: 0;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    background: #fff;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  .navbar .mega-menu-wrapper:hover > .mega-menu,
+  .navbar .mega-menu-wrapper:focus-within > .mega-menu {
+    display: block;
+  }
+
+  /* Invisible hit area between “MAĞAZA” and panel so the pointer does not “leave” the wrapper */
+  .navbar .mega-menu-wrapper::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    top: 100%;
+    height: 14px;
+    z-index: 1999;
+  }
+}
+
+/* Admin mobile drawer above page chrome */
+.admin-layout .offcanvas {
+  z-index: 1046;
+}
+
+.admin-mobile-topbar {
+  z-index: 1030;
+}
+
+/* Ana sayfa — kategori kartlarında ürün görselleri (çapraz solma) */
+.home-category-fade-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  min-height: 10rem;
+  overflow: hidden;
+  background: #f1f1f0;
+}
+
+
+.home-category-fade-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.65s ease-in-out;
+  pointer-events: none;
+}
+
+.home-category-fade-layer.is-active {
+  opacity: 1;
+}
+
+.home-category-fade-img {
+  object-fit: cover;
+}
+
+/* Ürün detay — küçük galeri şeridi ana görselin üstüne binmesin */
+.product-preview .product-thumb-strip {
+  position: relative;
+  z-index: 4;
+}
+
+.product-preview .product-main-stage {
+  position: relative;
+  z-index: 1;
 }

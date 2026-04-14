@@ -1,146 +1,139 @@
 "use client";
 
 import { useEffect } from "react";
+import Swiper from "swiper";
+import type { Swiper as SwiperType } from "swiper";
+import {
+  Autoplay,
+  EffectCoverflow,
+  EffectFade,
+  Navigation,
+  Pagination,
+  Thumbs,
+} from "swiper/modules";
 
-declare global {
-  interface Window {
-    Swiper: any;
-    jQuery: any;
+import "swiper/css";
+import "swiper/css/navigation";
+import "swiper/css/pagination";
+import "swiper/css/effect-fade";
+import "swiper/css/effect-coverflow";
+
+function destroyInstance(s: SwiperType | null | undefined) {
+  if (!s) return;
+  try {
+    s.destroy(true, true);
+  } catch {
+    /* already torn down */
   }
 }
 
+/**
+ * Imperative Swiper setup for legacy theme markup (main billboard, optional product sliders).
+ * Only destroys instances created here — never all `.swiper` nodes, so `swiper/react` carousels
+ * (e.g. HomeCollections) are not corrupted when `reinitKey` changes.
+ */
 export default function SwiperInit({ reinitKey }: { reinitKey?: number | string } = {}) {
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout | null = null;
-    let initTimeoutId: NodeJS.Timeout | null = null;
+    const created: SwiperType[] = [];
+    let kickoffDelayId: ReturnType<typeof setTimeout> | null = null;
+    let initTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
-    let isInitialized = false; // Prevent multiple initializations
-
-    // Wait for Swiper to be available
-    const waitForSwiper = (callback: () => void, maxAttempts = 50) => {
-      let attempts = 0;
-      const checkSwiper = () => {
-        if (!isMounted || isInitialized) return; // Component unmounted or already initialized, stop checking
-        if (typeof window !== "undefined" && window.Swiper) {
-          callback();
-        } else if (attempts < maxAttempts) {
-          attempts++;
-          timeoutId = setTimeout(checkSwiper, 100);
-        }
-      };
-      checkSwiper();
-    };
+    let isInitialized = false;
 
     const initSwipers = () => {
-      if (typeof window === "undefined" || !window.Swiper || isInitialized) return;
-      isInitialized = true; // Mark as initialized to prevent re-initialization
+      if (typeof window === "undefined" || isInitialized) return;
+      isInitialized = true;
 
-      // Initialize all main swipers (new collections and related products)
       const mainSwiperEls = document.querySelectorAll(".main-swiper");
       mainSwiperEls.forEach((mainSwiperEl) => {
-        // Check if already initialized
-        const existingSwiper = (mainSwiperEl as any).swiper;
-        if (!existingSwiper) {
-          new window.Swiper(mainSwiperEl as HTMLElement, {
+        const el = mainSwiperEl as HTMLElement & { swiper?: SwiperType };
+        if (!el.swiper) {
+          const instance = new Swiper(el, {
             slidesPerView: 3,
             spaceBetween: 80,
             speed: 700,
             loop: true,
             navigation: false,
             breakpoints: {
-              300: {
-                slidesPerView: 1,
-                spaceBetween: 20,
-              },
-              768: {
-                slidesPerView: 2,
-                spaceBetween: 20,
-              },
-              1200: {
-                slidesPerView: 3,
-                spaceBetween: 80,
-              },
+              300: { slidesPerView: 1, spaceBetween: 20 },
+              768: { slidesPerView: 2, spaceBetween: 20 },
+              1200: { slidesPerView: 3, spaceBetween: 80 },
             },
           });
+          created.push(instance);
         }
       });
 
-      // Initialize product carousel swipers
       const productCarousels = document.querySelectorAll(".product-carousel");
-      productCarousels.forEach((carousel: any) => {
+      productCarousels.forEach((carousel) => {
         const id = carousel.getAttribute("id");
-        const swiperEl = carousel.querySelector(".product-swiper");
+        const swiperEl = carousel.querySelector(".product-swiper") as (HTMLElement & { swiper?: SwiperType }) | null;
         if (swiperEl && !swiperEl.swiper) {
           const nextArrow = carousel.querySelector(".icon-arrow-right");
           const prevArrow = carousel.querySelector(".icon-arrow-left");
           const paginationEl = swiperEl.querySelector(".swiper-pagination");
-          
-          // 3 kart gösteren carousel'ler (en-son-eklenen, best-sellers)
           const isThreeSlides = id === "en-son-eklenen" || id === "best-sellers";
-          
-          // Get number of slides to ensure loop works
-          const slides = swiperEl.querySelectorAll('.swiper-slide');
+          const slides = swiperEl.querySelectorAll(".swiper-slide");
           const slideCount = slides.length;
-          
-          // Loop requires at least slidesPerView * 2 slides to work properly
           const canLoop = slideCount >= (isThreeSlides ? 6 : 8);
-          
-          // Initialize Swiper with custom navigation arrows and loop
-          new window.Swiper(swiperEl as HTMLElement, {
+
+          const instance = new Swiper(swiperEl, {
+            modules: [Navigation, Pagination],
             slidesPerView: isThreeSlides ? 3 : 4,
-            spaceBetween: isThreeSlides ? 20 : 20,
+            spaceBetween: 20,
             loop: canLoop,
             loopAdditionalSlides: isThreeSlides ? 3 : 4,
-            loopedSlides: isThreeSlides ? 3 : 4,
             watchSlidesProgress: true,
-            navigation: nextArrow && prevArrow ? {
-              nextEl: nextArrow as HTMLElement,
-              prevEl: prevArrow as HTMLElement,
-            } : false,
-            pagination: paginationEl ? {
-              el: paginationEl as HTMLElement,
-              clickable: true,
-            } : false,
+            navigation:
+              nextArrow && prevArrow
+                ? {
+                    nextEl: nextArrow as HTMLElement,
+                    prevEl: prevArrow as HTMLElement,
+                  }
+                : false,
+            pagination: paginationEl
+              ? {
+                  el: paginationEl as HTMLElement,
+                  clickable: true,
+                }
+              : false,
             breakpoints: {
               0: {
                 slidesPerView: 2,
                 spaceBetween: 20,
                 loop: slideCount >= 4,
                 loopAdditionalSlides: 2,
-                loopedSlides: 2,
               },
               999: {
                 slidesPerView: isThreeSlides ? 3 : 3,
                 spaceBetween: isThreeSlides ? 20 : 10,
-                loop: isThreeSlides ? slideCount >= 6 : slideCount >= 6,
+                loop: slideCount >= 6,
                 loopAdditionalSlides: isThreeSlides ? 3 : 3,
-                loopedSlides: isThreeSlides ? 3 : 3,
               },
               1366: {
                 slidesPerView: isThreeSlides ? 3 : 4,
                 spaceBetween: isThreeSlides ? 20 : 40,
                 loop: isThreeSlides ? slideCount >= 6 : slideCount >= 8,
                 loopAdditionalSlides: isThreeSlides ? 3 : 4,
-                loopedSlides: isThreeSlides ? 3 : 4,
               },
             },
           });
+          created.push(instance);
         }
       });
 
-      // Initialize testimonial swiper with infinite scroll
       const testimonialSwiperEl = document.querySelector(".testimonial-swiper") as
-        | (HTMLElement & { swiper?: any })
+        | (HTMLElement & { swiper?: SwiperType })
         | null;
       if (testimonialSwiperEl && !testimonialSwiperEl.swiper) {
         const isMobile = window.innerWidth < 768;
-        const swiper = new window.Swiper(".testimonial-swiper", {
+        const instance = new Swiper(".testimonial-swiper", {
+          modules: [Autoplay, Pagination, EffectCoverflow],
           effect: isMobile ? "slide" : "coverflow",
           grabCursor: true,
           centeredSlides: true,
           loop: true,
           loopAdditionalSlides: isMobile ? 2 : 5,
-          loopedSlides: isMobile ? 2 : 5,
           slidesPerView: "auto",
           spaceBetween: isMobile ? 20 : 30,
           autoplay: {
@@ -148,42 +141,33 @@ export default function SwiperInit({ reinitKey }: { reinitKey?: number | string 
             disableOnInteraction: false,
           },
           speed: 1000,
-          coverflowEffect: isMobile ? undefined : {
-            rotate: 0,
-            stretch: 0,
-            depth: 150,
-            modifier: 1.2,
-            slideShadows: false,
-            fade: true,
-          },
+          coverflowEffect: isMobile
+            ? undefined
+            : {
+                rotate: 0,
+                stretch: 0,
+                depth: 150,
+                modifier: 1.2,
+                slideShadows: false,
+              },
           pagination: {
             el: ".testimonial-swiper-pagination",
             clickable: true,
           },
           breakpoints: {
-            0: {
-              slidesPerView: 1,
-              spaceBetween: 20,
-            },
-            768: {
-              slidesPerView: "auto",
-              spaceBetween: 30,
-            },
+            0: { slidesPerView: 1, spaceBetween: 20 },
+            768: { slidesPerView: "auto", spaceBetween: 30 },
           },
           on: {
-            init: function (this: any) {
-              // Ensure slides are visible on init
+            init(this: SwiperType) {
               this.update();
             },
-            slideChange: function (this: any) {
-              // Ensure slides remain visible during transition
+            slideChange(this: SwiperType) {
               this.update();
             },
-            resize: function (this: any) {
-              // Update effect on resize
+            resize(this: SwiperType) {
               const isMobileNow = window.innerWidth < 768;
               if (isMobileNow && this.params.effect === "coverflow") {
-                this.changeDirection("horizontal", true);
                 this.params.effect = "slide";
                 this.update();
               } else if (!isMobileNow && this.params.effect === "slide") {
@@ -193,17 +177,18 @@ export default function SwiperInit({ reinitKey }: { reinitKey?: number | string 
             },
           },
         });
+        created.push(instance);
       }
 
-      // Initialize product detail page sliders
       const productLargeSliderEl = document.querySelector(".product-large-slider");
       const productThumbnailSliderEl = document.querySelector(".product-thumbnail-slider");
-      
+
       if (productLargeSliderEl) {
-        let thumbnailSwiper: any = null;
+        let thumbnailSwiper: SwiperType | null = null;
 
         if (productThumbnailSliderEl) {
-          thumbnailSwiper = new window.Swiper(".product-thumbnail-slider", {
+          thumbnailSwiper = new Swiper(".product-thumbnail-slider", {
+            modules: [Thumbs],
             slidesPerView: 3,
             spaceBetween: 15,
             direction: "horizontal",
@@ -214,64 +199,61 @@ export default function SwiperInit({ reinitKey }: { reinitKey?: number | string 
               768: { slidesPerView: 4, spaceBetween: 15 },
             },
           });
+          created.push(thumbnailSwiper);
         }
 
         const prevBtn = productLargeSliderEl.querySelector(".product-slider-prev");
         const nextBtn = productLargeSliderEl.querySelector(".product-slider-next");
 
-        new window.Swiper(".product-large-slider", {
+        const mainInstance = new Swiper(".product-large-slider", {
+          modules: [EffectFade, Navigation, Pagination, Thumbs],
           slidesPerView: 1,
           spaceBetween: 0,
           effect: "fade",
           fadeEffect: { crossFade: true },
           thumbs: thumbnailSwiper ? { swiper: thumbnailSwiper } : undefined,
-          navigation: (prevBtn && nextBtn) ? {
-            prevEl: prevBtn as HTMLElement,
-            nextEl: nextBtn as HTMLElement,
-          } : false,
+          navigation:
+            prevBtn && nextBtn
+              ? {
+                  prevEl: prevBtn as HTMLElement,
+                  nextEl: nextBtn as HTMLElement,
+                }
+              : false,
           pagination: {
             el: ".product-large-slider .swiper-pagination",
             clickable: true,
           },
         });
+        created.push(mainInstance);
       }
     };
 
-    // Wait for Swiper to load, then initialize
-    waitForSwiper(() => {
-      if (!isMounted || isInitialized) return; // Component unmounted or already initialized, don't initialize
-      // Small delay to ensure DOM is fully rendered
+    let idleId: ReturnType<typeof requestIdleCallback> | undefined;
+    const kickoff = () => {
+      if (!isMounted || isInitialized) return;
       initTimeoutId = setTimeout(() => {
-        if (isMounted && !isInitialized) {
-          initSwipers();
-        }
+        if (isMounted && !isInitialized) initSwipers();
       }, 200);
-    });
+    };
 
-    // Cleanup function
+    if (typeof window !== "undefined" && typeof requestIdleCallback !== "undefined") {
+      idleId = requestIdleCallback(() => kickoff(), { timeout: 2500 });
+    } else {
+      kickoffDelayId = setTimeout(kickoff, 400);
+    }
+
     return () => {
       isMounted = false;
       isInitialized = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
+      if (idleId !== undefined && typeof cancelIdleCallback !== "undefined") {
+        cancelIdleCallback(idleId);
       }
-      if (initTimeoutId) {
-        clearTimeout(initTimeoutId);
-        initTimeoutId = null;
+      if (kickoffDelayId) clearTimeout(kickoffDelayId);
+      if (initTimeoutId) clearTimeout(initTimeoutId);
+      for (let i = created.length - 1; i >= 0; i--) {
+        destroyInstance(created[i]);
       }
-      // Destroy all Swiper instances on unmount
-      if (typeof window !== "undefined" && window.Swiper) {
-        document.querySelectorAll(".swiper").forEach((el: any) => {
-          if (el.swiper) {
-            try {
-              el.swiper.destroy(true, true);
-            } catch (e) {
-              // Ignore errors during cleanup
-            }
-          }
-        });
-      }
+      created.length = 0;
     };
   }, [reinitKey]);
 

@@ -3,13 +3,47 @@
 import SvgSprite from "../components/SvgSprite";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getProductsGrid, getBestsellersGrid, Product } from "../lib/api/products";
 import { searchProducts, SearchResult } from "../lib/api/search";
 import { getCategoryBySlug, Category } from "../lib/api/categories";
-import { getImageUrl } from "../lib/api/config";
+import { getImageUrl, isApiHostedMediaSrc } from "../lib/api/config";
+
+function ProductGridImage({
+  src,
+  alt,
+  outOfStock,
+}: {
+  src: string;
+  alt: string;
+  outOfStock: boolean;
+}) {
+  const [imgSrc, setImgSrc] = useState(src);
+  useEffect(() => {
+    setImgSrc(src);
+  }, [src]);
+
+  return (
+    <Image
+      src={imgSrc}
+      alt={alt}
+      fill
+      sizes="(max-width: 768px) 50vw, (max-width: 992px) 33vw, 25vw"
+      quality={62}
+      unoptimized={isApiHostedMediaSrc(imgSrc)}
+      className={`product-image${outOfStock ? " out-of-stock-thumb" : ""}`}
+      style={{
+        objectFit: "cover",
+        display: "block",
+        ...(outOfStock ? { opacity: 0.45, filter: "grayscale(85%)" } : {}),
+      }}
+      onError={() => setImgSrc("/images/product-item-1.jpg")}
+    />
+  );
+}
 
 export default function ProductsPage() {
   return (
@@ -239,24 +273,15 @@ function ProductsContent() {
                       {isProductOutOfStock(product) && (
                         <span className="out-of-stock-badge">Tükendi</span>
                       )}
-                      <Link href={`/urunler/${product.id}`}>
-                        <img
+                      <Link
+                        href={`/urunler/${product.id}`}
+                        className="d-block position-relative w-100"
+                        style={{ aspectRatio: "9/16" }}
+                      >
+                        <ProductGridImage
                           src={getImageUrl(product.thumbnailImageUrl)}
                           alt={product.name}
-                          className={`product-image${isProductOutOfStock(product) ? " out-of-stock-thumb" : ""}`}
-                          style={{
-                            width: "100%",
-                            aspectRatio: "9/16",
-                            objectFit: "cover",
-                            display: "block",
-                            ...(isProductOutOfStock(product)
-                              ? { opacity: 0.45, filter: "grayscale(85%)" }
-                              : {}),
-                          }}
-                          loading="lazy"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
-                          }}
+                          outOfStock={isProductOutOfStock(product)}
                         />
                       </Link>
                       <Link href="/" className="btn-icon btn-wishlist">

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createProduct, Product } from "../../../lib/api/products";
+import { createProduct, Product, parseCustomerOptions } from "../../../lib/api/products";
+import { pickStockCaseInsensitive } from "../../../lib/productVariantStock";
+import { VariantStockEditor, type VariantColorRow } from "../VariantStockEditor";
 import { getBrands, Brand } from "../../../lib/api/brands";
 import { getCategories, Category } from "../../../lib/api/categories";
 
@@ -35,7 +37,28 @@ export default function CreateProductPage() {
     metaTitle: "",
     metaKeywords: "",
     metaDescription: "",
+    customerSizeOptions: "",
   });
+
+  const [variantRows, setVariantRows] = useState<VariantColorRow[]>([]);
+
+  const sizeLabels = useMemo(() => {
+    const raw = typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : "";
+    const p = parseCustomerOptions(raw);
+    return p.length > 0 ? p : ["XS", "S", "M", "L", "XL", "XXL"];
+  }, [formData.customerSizeOptions]);
+
+  useEffect(() => {
+    setVariantRows((prev) => {
+      if (prev.length === 0) return prev;
+      return prev.map((r) => ({
+        name: r.name,
+        stocks: Object.fromEntries(
+          sizeLabels.map((s) => [s, pickStockCaseInsensitive(r.stocks, s)])
+        ) as Record<string, number>,
+      }));
+    });
+  }, [sizeLabels.join("|")]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -87,10 +110,21 @@ export default function CreateProductPage() {
     setLoading(true);
 
     try {
+      const namedVariants = variantRows.filter((r) => r.name.trim());
       const productData: Partial<Product> = {
         ...formData,
         thumbnailImage: thumbnailImage || undefined,
         productImages: productImages.map((img) => ({ image: img })),
+        customerColorOptions: "",
+        customerVariantStockJson:
+          namedVariants.length > 0
+            ? JSON.stringify({
+                colors: namedVariants.map((r) => ({
+                  name: r.name.trim(),
+                  stocks: r.stocks,
+                })),
+              })
+            : undefined,
       };
 
       const result = await createProduct(productData);
@@ -245,7 +279,7 @@ export default function CreateProductPage() {
                   onChange={handleInputChange}
                 />
               </div>
-              <div className="col-md-6 mb-3">
+              <div className="col-12 col-md-6 mb-3">
                 <label className="form-label">Stok Adedi</label>
                 <input
                   type="number"
@@ -255,16 +289,17 @@ export default function CreateProductPage() {
                   onChange={handleInputChange}
                 />
               </div>
-              <div className="col-md-6 mb-3">
-                <div className="form-check mt-4">
+              <div className="col-12 mb-3">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
                   <input
-                    className="form-check-input"
+                    className="form-check-input flex-shrink-0 m-0"
                     type="checkbox"
                     name="isCallForPricing"
+                    id="createIsCallForPricing"
                     checked={formData.isCallForPricing}
                     onChange={handleInputChange}
                   />
-                  <label className="form-check-label">
+                  <label className="form-check-label mb-0" htmlFor="createIsCallForPricing" style={{ cursor: "pointer" }}>
                     Fiyat için Arayın
                   </label>
                 </div>
@@ -319,6 +354,35 @@ export default function CreateProductPage() {
                   Birden fazla kategori seçmek için Ctrl (Windows) veya Cmd (Mac) tuşuna basılı tutun.
                 </small>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card mb-4">
+          <div className="card-header">
+            <h5 className="mb-0">Renk × beden stoku</h5>
+          </div>
+          <div className="card-body">
+            <div className="row">
+              <div className="col-12 mb-3">
+                <label className="form-label" htmlFor="create-customer-size-options">
+                  Beden sütunları (isteğe bağlı)
+                </label>
+                <input
+                  id="create-customer-size-options"
+                  type="text"
+                  className="form-control"
+                  name="customerSizeOptions"
+                  value={typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : ""}
+                  onChange={handleInputChange}
+                  placeholder="Boş = XS, S, M, L, XL, XXL — özel: 36, 38, 40 veya S, M, L"
+                  autoComplete="off"
+                />
+                <small className="form-text text-muted">
+                  Virgülle ayırın. Matris tablosundaki sütun başlıkları buradan gelir.
+                </small>
+              </div>
+              <VariantStockEditor sizeLabels={sizeLabels} rows={variantRows} onChange={setVariantRows} />
             </div>
           </div>
         </div>
@@ -407,34 +471,32 @@ export default function CreateProductPage() {
             <h5 className="mb-0">Yayın Ayarları</h5>
           </div>
           <div className="card-body">
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    name="isPublished"
-                    checked={formData.isPublished}
-                    onChange={handleInputChange}
-                  />
-                  <label className="form-check-label">
-                    Ürün Aktif (Yayınla)
-                  </label>
-                </div>
+            <div className="d-flex flex-column gap-3">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <input
+                  className="form-check-input flex-shrink-0 m-0"
+                  type="checkbox"
+                  name="isPublished"
+                  id="createIsPublished"
+                  checked={formData.isPublished}
+                  onChange={handleInputChange}
+                />
+                <label className="form-check-label mb-0" htmlFor="createIsPublished" style={{ cursor: "pointer" }}>
+                  Ürün Aktif (Yayınla)
+                </label>
               </div>
-              <div className="col-md-6 mb-3">
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    name="isFeatured"
-                    checked={formData.isFeatured}
-                    onChange={handleInputChange}
-                  />
-                  <label className="form-check-label">
-                    Vitrin (Öne Çıkar)
-                  </label>
-                </div>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <input
+                  className="form-check-input flex-shrink-0 m-0"
+                  type="checkbox"
+                  name="isFeatured"
+                  id="createIsFeatured"
+                  checked={formData.isFeatured}
+                  onChange={handleInputChange}
+                />
+                <label className="form-check-label mb-0" htmlFor="createIsFeatured" style={{ cursor: "pointer" }}>
+                  Vitrin (Öne Çıkar)
+                </label>
               </div>
             </div>
           </div>

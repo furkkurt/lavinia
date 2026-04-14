@@ -14,6 +14,8 @@ export interface CategoryMenuItem {
   id: number;
   name: string;
   slug: string;
+  /** Resolved thumbnail URL from API when category has a menu image. */
+  thumbnailImageUrl?: string | null;
   children?: CategoryMenuItem[];
 }
 

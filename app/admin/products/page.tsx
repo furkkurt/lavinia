@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getProductsGrid, deleteProduct, changeProductStatus, Product } from "../../lib/api/products";
 import Link from "next/link";
 import Image from "next/image";
-import { getImageUrl } from "../../lib/api/config";
+import { getImageUrl, isApiHostedMediaSrc } from "../../lib/api/config";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -80,94 +80,162 @@ export default function AdminProductsPage() {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Ürün Yönetimi</h1>
-        <Link href="/admin/products/create" className="btn btn-primary">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2 mb-4">
+        <h1 className="mb-0">Ürün Yönetimi</h1>
+        <Link href="/admin/products/create" className="btn btn-primary text-nowrap">
           + Yeni Ürün Ekle
         </Link>
       </div>
 
       <div className="card">
         <div className="card-body">
-          <div className="table-responsive">
-            <table className="table table-hover">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Görsel</th>
-                  <th>Ad</th>
-                  <th>Fiyat</th>
-                  <th>Stok</th>
-                  <th>Durum</th>
-                  <th>İşlemler</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.id}</td>
-                    <td>
+          {/* Mobil (below md breakpoint): kart + tam genişlik butonlar */}
+          <div className="d-md-none admin-products-mobile vstack gap-3">
+            {products.map((product) => (
+              <div key={product.id} className="card border shadow-sm">
+                <div className="card-body p-3">
+                  <div className="d-flex gap-3 mb-3">
+                    <div className="flex-shrink-0">
                       {product.thumbnailImageUrl ? (
                         <Image
                           src={getImageUrl(product.thumbnailImageUrl)}
-                          alt={product.name}
-                          width={50}
-                          height={50}
+                          alt=""
+                          width={72}
+                          height={72}
                           style={{ objectFit: "cover" }}
                           className="rounded"
+                          unoptimized={isApiHostedMediaSrc(getImageUrl(product.thumbnailImageUrl))}
                         />
                       ) : (
-                        <div
-                          className="bg-secondary rounded"
-                          style={{ width: 50, height: 50 }}
-                        />
+                        <div className="bg-secondary rounded" style={{ width: 72, height: 72 }} />
                       )}
-                    </td>
-                    <td>{product.name}</td>
-                    <td>
-                      {product.price ? `₺${product.price.toFixed(2)}` : "-"}
-                    </td>
-                    <td>{product.stockQuantity ?? "-"}</td>
-                    <td>
+                    </div>
+                    <div className="min-w-0 flex-grow-1">
+                      <p className="small text-muted mb-1">#{product.id}</p>
+                      <p className="fw-semibold mb-2 text-break">{product.name}</p>
                       <span
-                        className={`badge ${
-                          product.isPublished ? "bg-success" : "bg-secondary"
-                        }`}
+                        className={`badge ${product.isPublished ? "bg-success" : "bg-secondary"}`}
                       >
                         {product.isPublished ? "Yayında" : "Taslak"}
                       </span>
-                    </td>
-                    <td>
-                      <div className="d-flex gap-2">
-                        <Link
-                          href={`/admin/products/${product.id}`}
-                          className="btn btn-sm btn-outline-primary"
-                        >
-                          Düzenle
-                        </Link>
-                        <button
-                          onClick={() => handleToggleStatus(product.id)}
-                          className="btn btn-sm btn-outline-warning"
-                        >
-                          {product.isPublished ? "Yayından Kaldır" : "Yayınla"}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product.id)}
-                          className="btn btn-sm btn-outline-danger"
-                        >
-                          Sil
-                        </button>
-                      </div>
-                    </td>
+                    </div>
+                  </div>
+                  <p className="mb-1 small">
+                    <span className="text-muted">Fiyat:</span>{" "}
+                    {product.price ? `₺${product.price.toFixed(2)}` : "—"}
+                  </p>
+                  <p className="mb-3 small">
+                    <span className="text-muted">Stok:</span> {product.stockQuantity ?? "—"}
+                  </p>
+                  <div className="d-grid gap-2">
+                    <Link href={`/admin/products/${product.id}`} className="btn btn-primary">
+                      Düzenle
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStatus(product.id)}
+                      className="btn btn-outline-warning"
+                    >
+                      {product.isPublished ? "Yayından Kaldır" : "Yayınla"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(product.id)}
+                      className="btn btn-outline-danger"
+                    >
+                      Sil
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Masaüstü: tablo */}
+          <div className="d-none d-md-block">
+            <div className="table-responsive">
+              <table className="table table-hover align-middle">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Görsel</th>
+                    <th>Ad</th>
+                    <th>Fiyat</th>
+                    <th>Stok</th>
+                    <th>Durum</th>
+                    <th style={{ minWidth: "280px" }}>İşlemler</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {products.map((product) => (
+                    <tr key={product.id}>
+                      <td>{product.id}</td>
+                      <td>
+                        {product.thumbnailImageUrl ? (
+                          <Image
+                            src={getImageUrl(product.thumbnailImageUrl)}
+                            alt={product.name}
+                            width={50}
+                            height={50}
+                            style={{ objectFit: "cover" }}
+                            className="rounded"
+                            unoptimized={isApiHostedMediaSrc(getImageUrl(product.thumbnailImageUrl))}
+                          />
+                        ) : (
+                          <div
+                            className="bg-secondary rounded"
+                            style={{ width: 50, height: 50 }}
+                          />
+                        )}
+                      </td>
+                      <td>{product.name}</td>
+                      <td>
+                        {product.price ? `₺${product.price.toFixed(2)}` : "-"}
+                      </td>
+                      <td>{product.stockQuantity ?? "-"}</td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            product.isPublished ? "bg-success" : "bg-secondary"
+                          }`}
+                        >
+                          {product.isPublished ? "Yayında" : "Taslak"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="d-flex gap-2 flex-wrap">
+                          <Link
+                            href={`/admin/products/${product.id}`}
+                            className="btn btn-sm btn-outline-primary"
+                          >
+                            Düzenle
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(product.id)}
+                            className="btn btn-sm btn-outline-warning"
+                          >
+                            {product.isPublished ? "Yayından Kaldır" : "Yayınla"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(product.id)}
+                            className="btn btn-sm btn-outline-danger"
+                          >
+                            Sil
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {totalPages > 1 && (
             <nav className="mt-4">
-              <ul className="pagination justify-content-center">
+              <ul className="pagination justify-content-center flex-wrap gap-1">
                 <li className={`page-item ${pageIndex === 0 ? "disabled" : ""}`}>
                   <button
                     className="page-link"

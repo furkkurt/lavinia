@@ -7,10 +7,8 @@ export default function Footer() {
   return (
       <footer id="footer" className="mt-3">
       <div className="container">
-        {/* Desktop: 4-column layout, Mobile: Stacked layout */}
         <div className="row py-2 footer-main-content">
-          {/* Column 1: Logo ve Sosyal Medya */}
-          <div className="col-lg-3 col-12 footer-brand-col">
+          <div className="col-lg-4 col-12 footer-brand-col">
             <div className="footer-brand mb-2 footer-brand-desktop">
               <div className="footer-intro mb-2">
                 <Link href="/" className="d-inline-block">
@@ -19,6 +17,11 @@ export default function Footer() {
               </div>
               <p className="footer-description" style={{ marginBottom: "0.75rem", lineHeight: "1.6" }}>
                 Kadın giyiminde zarafet ve kaliteyi bir arada sunuyoruz. Yeni sezon koleksiyonlarımızla tarzınıza değer katıyoruz.
+              </p>
+              <p className="small text-muted mb-2" style={{ lineHeight: 1.6 }}>
+                <a href="mailto:info@boutiquelavinia.com" className="item-anchor text-secondary">
+                  info@boutiquelavinia.com
+                </a>
               </p>
               <div className="social-links">
                 <ul className="list-unstyled d-flex flex-wrap gap-3 mb-0">
@@ -42,67 +45,41 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Column 2: Hızlı Bağlantılar */}
-          <div className="col-lg-3 col-6 footer-menu-col">
+          <div className="col-lg-4 col-6 footer-menu-col">
             <div className="footer-menu footer-menu-002">
               <h5 className="widget-title text-uppercase mb-2">
                 Hızlı Bağlantılar
               </h5>
               <ul className="menu-list list-unstyled text-uppercase border-animation-left fs-6" style={{ lineHeight: "1.8" }}>
-                {["Ana Sayfa", "Hakkımızda", "Hizmetler", "Ürünler", "İletişim"].map((link) => (
-                  <li key={link} className="menu-item" style={{ marginBottom: "0.25rem" }}>
-                    <Link href={link === "Ürünler" ? "/urunler" : "/"} className="item-anchor">
-                      {link}
-                    </Link>
-                  </li>
-                ))}
+                <li className="menu-item" style={{ marginBottom: "0.25rem" }}>
+                  <Link href="/" className="item-anchor">Ana Sayfa</Link>
+                </li>
+                <li className="menu-item" style={{ marginBottom: "0.25rem" }}>
+                  <Link href="/hakkimizda" className="item-anchor">Hakkımızda</Link>
+                </li>
+                <li className="menu-item" style={{ marginBottom: "0.25rem" }}>
+                  <Link href="/urunler" className="item-anchor">Ürünler</Link>
+                </li>
               </ul>
             </div>
           </div>
 
-          {/* Column 3: Yardım & Bilgi */}
-          <div className="col-lg-3 col-6 footer-menu-col">
+          <div className="col-lg-4 col-6 footer-menu-col">
             <div className="footer-menu footer-menu-003">
               <h5 className="widget-title text-uppercase mb-2">
-                Yardım & Bilgi
+                Yardım
               </h5>
               <ul className="menu-list list-unstyled text-uppercase border-animation-left fs-6" style={{ lineHeight: "1.8" }}>
-                {[
-                  "Sipariş Takibi",
-                  "İade + Değişim",
-                  "Kargo + Teslimat",
-                  "İletişim",
-                  "Bizi Bulun",
-                  "Sık Sorulan Sorular",
-                ].map((link) => (
-                  <li key={link} className="menu-item" style={{ marginBottom: "0.25rem" }}>
-                    <Link href="/" className="item-anchor">
-                      {link}
-                    </Link>
-                  </li>
-                ))}
+                <li className="menu-item" style={{ marginBottom: "0.25rem" }}>
+                  <Link href="/iade-degisim" className="item-anchor">İade + Değişim</Link>
+                </li>
+                <li className="menu-item" style={{ marginBottom: "0.25rem" }}>
+                  <Link href="/kargo-teslimat" className="item-anchor">Kargo + Teslimat</Link>
+                </li>
+                <li className="menu-item" style={{ marginBottom: "0.25rem" }}>
+                  <Link href="/sik-sorulan-sorular" className="item-anchor">Sık Sorulan Sorular</Link>
+                </li>
               </ul>
-            </div>
-          </div>
-
-          {/* Column 4: İletişim */}
-          <div className="col-lg-3 col-12 footer-menu-col">
-            <div className="footer-menu footer-menu-004">
-              <h5 className="widget-title text-uppercase mb-2">
-                İletişim
-              </h5>
-              <p style={{ marginBottom: "0.5rem", lineHeight: "1.6" }}>
-                Sorularınız veya önerileriniz mi var?{" "}
-                <a href="mailto:info@boutiquelavinia.com" className="item-anchor">
-                  info@boutiquelavinia.com
-                </a>
-              </p>
-              <p style={{ lineHeight: "1.6", marginBottom: 0 }}>
-                Destek mi gerekiyor? Bizi arayın.{" "}
-                <a href="tel:+90 212 123 45 67" className="item-anchor">
-                  +90 212 123 45 67
-                </a>
-              </p>
             </div>
           </div>
         </div>

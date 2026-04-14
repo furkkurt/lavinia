@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState, useCallback, useEffect } from "react";
-import { getImageUrl } from "../lib/api/config";
+import { getImageUrl, isApiHostedMediaSrc } from "../lib/api/config";
 
 /**
  * Single source of design for all product carousels on the site.
@@ -23,6 +24,43 @@ function isCarouselOutOfStock(p: CarouselProduct) {
   return p.stockTrackingIsEnabled === true && (p.stockQuantity ?? 0) <= 0;
 }
 
+function CarouselProductImage({
+  src,
+  alt,
+  outOfStock,
+  priority,
+}: {
+  src: string;
+  alt: string;
+  outOfStock: boolean;
+  /** İlk slayt LCP için (yalnızca gerçekten üstte görünen carousel’de) */
+  priority?: boolean;
+}) {
+  const [imgSrc, setImgSrc] = useState(src);
+  useEffect(() => {
+    setImgSrc(src);
+  }, [src]);
+
+  return (
+    <Image
+      src={imgSrc}
+      alt={alt}
+      fill
+      sizes="(max-width: 768px) 42vw, 280px"
+      quality={60}
+      priority={priority}
+      unoptimized={isApiHostedMediaSrc(imgSrc)}
+      className={`product-image${outOfStock ? " out-of-stock-thumb" : ""}`}
+      style={{
+        objectFit: "cover",
+        display: "block",
+        ...(outOfStock ? { opacity: 0.45, filter: "grayscale(85%)" } : {}),
+      }}
+      onError={() => setImgSrc("/images/product-item-1.jpg")}
+    />
+  );
+}
+
 export interface ProductCarouselProps {
   id: string;
   title: string;
@@ -31,6 +69,8 @@ export interface ProductCarouselProps {
   additionalClassName?: string;
   /** Alt boşluğu kaldırır (örn. hemen altında Kategoriler olduğunda) */
   compactBottom?: boolean;
+  /** İlk ürün görseline priority (örn. “Yeni Gelenler” LCP adayı) */
+  eagerFirstImage?: boolean;
 }
 
 export default function ProductCarousel({
@@ -40,6 +80,7 @@ export default function ProductCarousel({
   showViewAllLink = true,
   additionalClassName = "",
   compactBottom = false,
+  eagerFirstImage = false,
 }: ProductCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -118,10 +159,13 @@ export default function ProductCarousel({
       style={compactBottom ? { marginBottom: 0, paddingBottom: 0 } : undefined}
     >
       <div className={`container ${compactBottom ? "pb-0 mb-0" : "section-spacing"}`}>
-        <div className="d-flex flex-column flex-md-row flex-md-wrap align-items-stretch align-items-md-center justify-content-md-between gap-2 gap-md-3 mb-4">
-          <h4 className="text-uppercase mb-0">{title}</h4>
+        <div className="d-flex flex-column flex-md-row flex-md-wrap align-items-stretch align-items-md-center justify-content-md-between gap-2 gap-md-3 mb-4 product-carousel-header">
+          <h4 className="text-uppercase mb-0 product-carousel-title">{title}</h4>
           {showViewAllLink && (
-            <Link href="/urunler" className="btn-link product-carousel-view-all text-center text-md-end py-1 py-md-0">
+            <Link
+              href="/urunler"
+              className="btn-link product-carousel-view-all text-center text-md-end py-2 py-md-1 px-2 px-md-0 rounded-0"
+            >
               Tüm Ürünleri Gör
             </Link>
           )}
@@ -165,7 +209,7 @@ export default function ProductCarousel({
               msOverflowStyle: "none",
             }}
           >
-            {products.map((product) => (
+            {products.map((product, productIndex) => (
               <div
                 key={product.id}
                 className="product-carousel-card flex-shrink-0"
@@ -179,30 +223,22 @@ export default function ProductCarousel({
                     {product.stockQuantity !== undefined && product.stockQuantity > 0 && product.stockQuantity <= 3 && (
                       <span className="stock-badge">Son {product.stockQuantity} ürün!</span>
                     )}
-                    {product.specialPrice && product.originalPrice && product.specialPrice < product.originalPrice && (
+                    {product.specialPrice != null &&
+                      product.specialPrice > 0 &&
+                      product.originalPrice != null &&
+                      product.originalPrice > 0 &&
+                      product.specialPrice < product.originalPrice && (
                       <span className="discount-badge">%{Math.round((1 - product.specialPrice / product.originalPrice) * 100)} İndirim</span>
                     )}
                     {isCarouselOutOfStock(product) && (
                       <span className="out-of-stock-badge">Tükendi</span>
                     )}
-                    <Link href={`/urunler/${product.id}`}>
-                      <img
+                    <Link href={`/urunler/${product.id}`} className="d-block position-relative w-100" style={{ aspectRatio: "9/16" }}>
+                      <CarouselProductImage
                         src={getImageUrl(product.img)}
                         alt={product.title}
-                        className={`product-image${isCarouselOutOfStock(product) ? " out-of-stock-thumb" : ""}`}
-                        style={{
-                          width: "100%",
-                          aspectRatio: "9/16",
-                          objectFit: "cover",
-                          display: "block",
-                          ...(isCarouselOutOfStock(product)
-                            ? { opacity: 0.45, filter: "grayscale(85%)" }
-                            : {}),
-                        }}
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "/images/product-item-1.jpg";
-                        }}
+                        outOfStock={isCarouselOutOfStock(product)}
+                        priority={eagerFirstImage && productIndex === 0}
                       />
                     </Link>
                   </div>
@@ -211,7 +247,11 @@ export default function ProductCarousel({
                       <Link href={`/urunler/${product.id}`}>{product.title}</Link>
                     </h5>
                     <Link href={`/urunler/${product.id}`} className="text-decoration-none" data-after="Sepete Ekle">
-                      {product.specialPrice && product.originalPrice && product.specialPrice < product.originalPrice ? (
+                      {product.specialPrice != null &&
+                      product.specialPrice > 0 &&
+                      product.originalPrice != null &&
+                      product.originalPrice > 0 &&
+                      product.specialPrice < product.originalPrice ? (
                         <><del className="text-muted me-1">₺{product.originalPrice.toFixed(2)}</del> <span className="text-danger fw-bold">₺{product.specialPrice.toFixed(2)}</span></>
                       ) : (
                         <span>{product.price}</span>

@@ -39,6 +39,13 @@ export default function AdminDevPage() {
             <strong>Mağaza menüsünde junk görüyorsanız:</strong> Aşağıdaki &quot;Kategorileri temizle&quot; kutusu{" "}
             <strong>işaretli</strong> olmalı. İşaretleyip tekrar import edin.
           </div>
+          <div className="alert alert-info py-2 small mb-3" role="note">
+            <strong>504:</strong> Bu istek nginx üzerinden <strong>doğrudan Kestrel :5000</strong> gitmeli (Next :3000
+            değil). <code>updateServer.md</code> içindeki <code>location ^~ /api/legacy-import</code> örneği{" "}
+            <code>proxy_pass http://127.0.0.1:5000</code> kullanır; sırayı genel <code>location /</code> öncesine
+            koyun, ardından <code>{`sudo nginx -t && sudo systemctl reload nginx`}</code>. Ürün adı kırpması C# tarafında;
+            504 ağ zaman aşımıdır.
+          </div>
           <div className="form-check mb-3">
             <input
               className="form-check-input"

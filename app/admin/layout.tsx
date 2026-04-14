@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { adminLogin, isAdmin, validateToken } from "../lib/api/auth";
+import { removeAuthToken } from "../lib/api/config";
+import { hideOffcanvasById } from "../lib/hideOffcanvas";
 
 export default function AdminLayout({
   children,
@@ -25,7 +27,7 @@ export default function AdminLayout({
         setIsLoggedIn(valid && isAdmin());
         if (!valid || !isAdmin()) {
           localStorage.removeItem("isLoggedIn");
-          localStorage.removeItem("authToken");
+          removeAuthToken();
           localStorage.removeItem("adminUser");
         }
       });
@@ -68,7 +70,7 @@ export default function AdminLayout({
 
   const handleLogout = () => {
     localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("authToken");
+    removeAuthToken();
     setIsLoggedIn(false);
         router.push("/admin");
   };
@@ -143,24 +145,32 @@ export default function AdminLayout({
 
   const menuItems = [
     { href: "/admin/statistics", label: "İstatistikler" },
+    { href: "/admin/settings", label: "Mağaza ayarları" },
     { href: "/admin/orders", label: "Siparişler" },
     { href: "/admin/products", label: "Ürünler" },
     { href: "/admin/categories", label: "Kategoriler" },
+    { href: "/admin/collections", label: "Koleksiyonlar" },
     { href: "/admin/reviews", label: "Değerlendirmeler" },
     { href: "/admin/users", label: "Kullanıcılar" },
     { href: "/admin/dev", label: "Dev" },
   ];
 
+  const navLinkClass = (href: string) =>
+    `d-block px-3 py-2 text-white text-decoration-none ${pathname === href ? "bg-primary" : ""}`;
+
+  const closeMobileMenu = () => hideOffcanvasById("adminOffcanvas");
+
   return (
     <div className="admin-layout d-flex" style={{ minHeight: "100vh" }}>
-      {/* Sidebar */}
+      {/* Masaüstü kenar çubuğu */}
       <aside
-        className="bg-dark text-white position-relative"
+        className="bg-dark text-white position-relative d-none d-md-block"
         style={{
           width: sidebarCollapsed ? "60px" : "250px",
           minHeight: "100vh",
           padding: "1.5rem 0",
           transition: "width 0.2s ease",
+          flexShrink: 0,
         }}
       >
         <button
@@ -182,12 +192,8 @@ export default function AdminLayout({
             <Link
               key={item.href}
               href={item.href}
-              className={`d-block px-3 py-2 text-white text-decoration-none ${
-                pathname === item.href ? "bg-primary" : ""
-              }`}
-              style={{
-                transition: "background-color 0.2s",
-              }}
+              className={navLinkClass(item.href)}
+              style={{ transition: "background-color 0.2s" }}
               title={sidebarCollapsed ? item.label : undefined}
             >
               {!sidebarCollapsed && item.label}
@@ -203,6 +209,7 @@ export default function AdminLayout({
             {!sidebarCollapsed && "Ana Sayfa"}
           </Link>
           <button
+            type="button"
             onClick={handleLogout}
             className="btn btn-outline-light w-100 mt-2"
             title={sidebarCollapsed ? "Çıkış Yap" : undefined}
@@ -212,11 +219,77 @@ export default function AdminLayout({
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-grow-1" style={{ backgroundColor: "#f5f5f5" }}>
-        <div className="container-fluid p-4">
-          {children}
+      {/* Mobil menü (Bootstrap offcanvas; bundle root layout’ta yüklenir) */}
+      <div
+        className="offcanvas offcanvas-start bg-dark text-white"
+        tabIndex={-1}
+        id="adminOffcanvas"
+        aria-labelledby="adminOffcanvasLabel"
+      >
+        <div className="offcanvas-header border-bottom border-secondary">
+          <h5 className="offcanvas-title" id="adminOffcanvasLabel">
+            Menü
+          </h5>
+          <button
+            type="button"
+            className="btn-close btn-close-white"
+            data-bs-dismiss="offcanvas"
+            aria-label="Kapat"
+          />
         </div>
+        <div className="offcanvas-body d-flex flex-column gap-1 p-0 admin-offcanvas-nav">
+          {menuItems.map((item) => (
+            <Link
+              key={`m-${item.href}`}
+              href={item.href}
+              scroll={false}
+              className={`admin-offcanvas-link ${navLinkClass(item.href)}`}
+              onClick={() => closeMobileMenu()}
+              style={{ transition: "background-color 0.2s" }}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <div className="px-3 pt-3 mt-auto border-top border-secondary">
+            <Link
+              href="/"
+              scroll={false}
+              className="d-block px-3 py-2 text-white text-decoration-none admin-offcanvas-link"
+              onClick={() => closeMobileMenu()}
+            >
+              Ana Sayfa
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                closeMobileMenu();
+                handleLogout();
+              }}
+              className="btn btn-outline-light w-100 mt-2"
+              data-bs-dismiss="offcanvas"
+            >
+              Çıkış Yap
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <main className="flex-grow-1 d-flex flex-column" style={{ backgroundColor: "#f5f5f5", minWidth: 0 }}>
+        <div className="d-md-none d-flex align-items-center gap-2 px-2 py-2 bg-white border-bottom sticky-top shadow-sm admin-mobile-topbar">
+          <button
+            type="button"
+            className="btn btn-outline-dark admin-mobile-menu-btn"
+            data-bs-toggle="offcanvas"
+            data-bs-target="#adminOffcanvas"
+            aria-controls="adminOffcanvas"
+          >
+            Menü
+          </button>
+          <span className="fw-semibold text-truncate flex-grow-1" style={{ minWidth: 0 }}>
+            Yönetim paneli
+          </span>
+        </div>
+        <div className="container-fluid px-2 px-md-3 py-3 py-md-4 flex-grow-1 admin-main-inner">{children}</div>
       </main>
     </div>
   );

@@ -62,9 +62,9 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Siparişler</h2>
-        <span className="text-muted">Toplam: {total} sipariş</span>
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4">
+        <h2 className="mb-0">Siparişler</h2>
+        <span className="text-muted small text-sm-start">Toplam: {total} sipariş</span>
       </div>
 
       {loading ? (
@@ -75,98 +75,210 @@ export default function AdminOrdersPage() {
         <div className="text-center py-5 text-muted">Henüz sipariş bulunmuyor.</div>
       ) : (
         <>
-          <div className="table-responsive">
-            <table className="table table-hover">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Müşteri</th>
-                  <th>Toplam</th>
-                  <th>Durum</th>
-                  <th>Tarih</th>
-                  <th>İşlemler</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => {
-                  const statusInfo = getStatusInfo(order.orderStatus);
-                  const isUpdating = updating === order.id;
-                  return (
-                    <tr key={order.id} style={{ opacity: isUpdating ? 0.5 : 1 }}>
-                      <td>
-                        <Link href={`/admin/orders/${order.id}`} className="fw-bold text-decoration-none">
-                          #{order.id}
-                        </Link>
-                      </td>
-                      <td>{order.customerName}</td>
-                      <td className="fw-bold">{order.orderTotalString}</td>
-                      <td>
-                        <span className="badge" style={{ background: statusInfo.color, borderRadius: "4px", padding: "5px 10px" }}>
-                          {statusInfo.label}
-                        </span>
-                      </td>
-                      <td>{new Date(order.createdOn).toLocaleDateString("tr-TR")}</td>
-                      <td>
-                        <div className="d-flex gap-1 flex-wrap">
-                          {order.orderStatus === "PaymentReceived" && (
-                            <button
-                              className="btn btn-sm btn-primary"
-                              disabled={isUpdating}
-                              onClick={() => handleStatusChange(order.id, STATUS_ID.Shipping)}
-                            >
-                              Kargoya Ver
-                            </button>
-                          )}
-                          {order.orderStatus === "Shipping" && (
-                            <button
-                              className="btn btn-sm btn-success"
-                              disabled={isUpdating}
-                              onClick={() => handleStatusChange(order.id, STATUS_ID.Shipped)}
-                            >
-                              Teslim Edildi
-                            </button>
-                          )}
-                          {order.orderStatus === "Shipped" && (
-                            <button
-                              className="btn btn-sm btn-dark"
-                              disabled={isUpdating}
-                              onClick={() => handleStatusChange(order.id, STATUS_ID.Complete)}
-                            >
-                              Tamamla
-                            </button>
-                          )}
-                          {(order.orderStatus === "New" || order.orderStatus === "PendingPayment") && (
-                            <button
-                              className="btn btn-sm btn-outline-success"
-                              disabled={isUpdating}
-                              onClick={() => handleStatusChange(order.id, STATUS_ID.PaymentReceived)}
-                            >
-                              Onayla
-                            </button>
-                          )}
-                          <a
-                            href={getInvoiceUrl(order.id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-sm btn-outline-secondary"
-                          >
-                            Fatura
-                          </a>
-                          <Link href={`/admin/orders/${order.id}`} className="btn btn-sm btn-outline-dark">
-                            Detay
+          {/* Mobil: kart — butonlar taşmaz */}
+          <div className="d-md-none admin-orders-mobile vstack gap-3">
+            {orders.map((order) => {
+              const statusInfo = getStatusInfo(order.orderStatus);
+              const isUpdating = updating === order.id;
+              return (
+                <div
+                  key={order.id}
+                  className="card border shadow-sm"
+                  style={{ opacity: isUpdating ? 0.55 : 1 }}
+                >
+                  <div className="card-body p-3">
+                    <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
+                      <Link href={`/admin/orders/${order.id}`} className="fw-bold text-decoration-none fs-6">
+                        #{order.id}
+                      </Link>
+                      <span
+                        className="badge text-wrap text-start"
+                        style={{
+                          background: statusInfo.color,
+                          borderRadius: "6px",
+                          padding: "6px 10px",
+                          maxWidth: "58%",
+                          whiteSpace: "normal",
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {statusInfo.label}
+                      </span>
+                    </div>
+                    <p className="mb-1 small text-break">
+                      <span className="text-muted">Müşteri:</span> {order.customerName}
+                    </p>
+                    <p className="mb-1 small">
+                      <span className="text-muted">Toplam:</span>{" "}
+                      <strong>{order.orderTotalString}</strong>
+                    </p>
+                    <p className="mb-3 small text-muted">
+                      {new Date(order.createdOn).toLocaleDateString("tr-TR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                    <div className="d-grid gap-2">
+                      {order.orderStatus === "PaymentReceived" && (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusChange(order.id, STATUS_ID.Shipping)}
+                        >
+                          Kargoya Ver
+                        </button>
+                      )}
+                      {order.orderStatus === "Shipping" && (
+                        <button
+                          type="button"
+                          className="btn btn-success"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusChange(order.id, STATUS_ID.Shipped)}
+                        >
+                          Teslim Edildi
+                        </button>
+                      )}
+                      {order.orderStatus === "Shipped" && (
+                        <button
+                          type="button"
+                          className="btn btn-dark"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusChange(order.id, STATUS_ID.Complete)}
+                        >
+                          Tamamla
+                        </button>
+                      )}
+                      {(order.orderStatus === "New" || order.orderStatus === "PendingPayment") && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-success"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusChange(order.id, STATUS_ID.PaymentReceived)}
+                        >
+                          Onayla
+                        </button>
+                      )}
+                      <a
+                        href={getInvoiceUrl(order.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-outline-secondary"
+                      >
+                        Fatura PDF
+                      </a>
+                      <Link href={`/admin/orders/${order.id}`} className="btn btn-outline-dark">
+                        Sipariş detayı
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Masaüstü: tablo */}
+          <div className="d-none d-md-block">
+            <div className="table-responsive">
+              <table className="table table-hover align-middle">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Müşteri</th>
+                    <th>Toplam</th>
+                    <th>Durum</th>
+                    <th>Tarih</th>
+                    <th style={{ minWidth: "220px" }}>İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((order) => {
+                    const statusInfo = getStatusInfo(order.orderStatus);
+                    const isUpdating = updating === order.id;
+                    return (
+                      <tr key={order.id} style={{ opacity: isUpdating ? 0.5 : 1 }}>
+                        <td>
+                          <Link href={`/admin/orders/${order.id}`} className="fw-bold text-decoration-none">
+                            #{order.id}
                           </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td>{order.customerName}</td>
+                        <td className="fw-bold">{order.orderTotalString}</td>
+                        <td>
+                          <span className="badge" style={{ background: statusInfo.color, borderRadius: "4px", padding: "5px 10px" }}>
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td>{new Date(order.createdOn).toLocaleDateString("tr-TR")}</td>
+                        <td>
+                          <div className="d-flex gap-1 flex-wrap">
+                            {order.orderStatus === "PaymentReceived" && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                disabled={isUpdating}
+                                onClick={() => handleStatusChange(order.id, STATUS_ID.Shipping)}
+                              >
+                                Kargoya Ver
+                              </button>
+                            )}
+                            {order.orderStatus === "Shipping" && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-success"
+                                disabled={isUpdating}
+                                onClick={() => handleStatusChange(order.id, STATUS_ID.Shipped)}
+                              >
+                                Teslim Edildi
+                              </button>
+                            )}
+                            {order.orderStatus === "Shipped" && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-dark"
+                                disabled={isUpdating}
+                                onClick={() => handleStatusChange(order.id, STATUS_ID.Complete)}
+                              >
+                                Tamamla
+                              </button>
+                            )}
+                            {(order.orderStatus === "New" || order.orderStatus === "PendingPayment") && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-success"
+                                disabled={isUpdating}
+                                onClick={() => handleStatusChange(order.id, STATUS_ID.PaymentReceived)}
+                              >
+                                Onayla
+                              </button>
+                            )}
+                            <a
+                              href={getInvoiceUrl(order.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-sm btn-outline-secondary"
+                            >
+                              Fatura
+                            </a>
+                            <Link href={`/admin/orders/${order.id}`} className="btn btn-sm btn-outline-dark">
+                              Detay
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {totalPages > 1 && (
             <nav className="mt-3">
-              <ul className="pagination justify-content-center">
+              <ul className="pagination justify-content-center flex-wrap gap-1">
                 <li className={`page-item ${pageIndex === 0 ? "disabled" : ""}`}>
                   <button className="page-link" onClick={() => setPageIndex(pageIndex - 1)}>Önceki</button>
                 </li>

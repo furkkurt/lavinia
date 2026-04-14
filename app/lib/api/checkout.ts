@@ -78,3 +78,32 @@ export async function completeCheckout(
 
   return { success: true, data: response.data! };
 }
+
+export interface PayTrPrepareBody {
+  email: string;
+  shippingAddressId: number;
+  orderNote?: string;
+  guestShippingAddress?: GuestShippingAddress;
+}
+
+/** PayTR öncesi: teslimat + e-posta checkout ShippingData’ya yazılır. */
+export async function preparePayTrCheckout(
+  checkoutId: string,
+  body: PayTrPrepareBody
+): Promise<{ success: boolean; error?: string }> {
+  const response = await apiFetch<{ ok: boolean }>(`/api/checkout/${checkoutId}/prepare-paytr`, {
+    method: "POST",
+    body: JSON.stringify({
+      email: body.email.trim(),
+      shippingAddressId: body.shippingAddressId,
+      orderNote: body.orderNote,
+      ...(body.guestShippingAddress ? { guestShippingAddress: body.guestShippingAddress } : {}),
+    }),
+  });
+
+  if (response.error) {
+    return { success: false, error: response.error };
+  }
+
+  return { success: true };
+}

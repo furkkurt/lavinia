@@ -42,11 +42,16 @@ function isDigerCategory(cat: { name: string; slug?: string }): boolean {
 }
 import { useRouter } from "next/navigation";
 import { register, login, adminLogin, getCurrentUser, logout as apiLogout, isAdmin, validateToken } from "../lib/api/auth";
+import { getAuthToken, removeAuthToken } from "../lib/api/config";
 import { getMenuCategories, CategoryMenuItem } from "../lib/api/categories";
 import { getCartCount } from "../lib/api/cart";
+import { hideOffcanvasById } from "../lib/hideOffcanvas";
+
+const OFFCANVAS_NAV_ID = "offcanvasNavbar";
 
 export default function Navbar() {
   const router = useRouter();
+  const closeMobileNav = () => hideOffcanvasById(OFFCANVAS_NAV_ID);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -70,7 +75,7 @@ export default function Navbar() {
   useEffect(() => {
     // Check if user is logged in from localStorage
     const loggedIn = localStorage.getItem("isLoggedIn") === "true";
-    const hasToken = typeof window !== "undefined" && !!localStorage.getItem("authToken");
+    const hasToken = typeof window !== "undefined" && !!getAuthToken();
     
     const initAuth = async () => {
       if (loggedIn || hasToken) {
@@ -187,7 +192,7 @@ export default function Navbar() {
       console.error("Logout error:", error);
     } finally {
       localStorage.removeItem("isLoggedIn");
-      localStorage.removeItem("authToken");
+      removeAuthToken();
       setIsLoggedIn(false);
       setCurrentUser(null);
       if (typeof window !== "undefined") {
@@ -264,17 +269,6 @@ export default function Navbar() {
                 />
               </Link>
 
-              <button
-                className="navbar-toggler d-xl-none"
-                type="button"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#offcanvasNavbar"
-                aria-controls="offcanvasNavbar"
-                aria-label="Menüyü aç/kapat"
-              >
-                <span className="navbar-toggler-icon"></span>
-              </button>
-
               <div className="d-none d-xl-flex flex-grow-1">
                 <ul className="navbar-nav justify-content-end flex-grow-1 gap-1 gap-md-5 pe-3">
                   <li className="nav-item">
@@ -283,24 +277,10 @@ export default function Navbar() {
                         </Link>
                   </li>
                   <li className="nav-item mega-menu-wrapper">
-                    <a
-                      className="nav-link"
-                      href="#"
-                      onMouseEnter={(e) => {
-                        const megaMenu = document.getElementById("megaMenu");
-                        if (megaMenu) megaMenu.style.display = "block";
-                      }}
-                    >
+                    <a className="nav-link" href="#" onClick={(e) => e.preventDefault()}>
                       MAĞAZA
                     </a>
-                    <div
-                      id="megaMenu"
-                      className="mega-menu"
-                      onMouseLeave={(e) => {
-                        const megaMenu = document.getElementById("megaMenu");
-                        if (megaMenu) megaMenu.style.display = "none";
-                      }}
-                    >
+                    <div id="megaMenu" className="mega-menu">
                       <div className="container-fluid">
                         <div className="container">
                           <div className="row py-4 align-items-start">
@@ -362,8 +342,8 @@ export default function Navbar() {
                     </div>
                   </li>
                   <li className="nav-item">
-                    <Link className="nav-link" href="#">
-                      İLETİŞİM
+                    <Link className="nav-link" href="/hakkimizda">
+                      HAKKIMIZDA
                     </Link>
                   </li>
                 </ul>
@@ -474,6 +454,18 @@ export default function Navbar() {
                     </svg>
                   </button>
                 </li>
+                <li className="d-xl-none">
+                  <button
+                    className="navbar-toggler p-1 border-0"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target={`#${OFFCANVAS_NAV_ID}`}
+                    aria-controls={OFFCANVAS_NAV_ID}
+                    aria-label="Menüyü aç/kapat"
+                  >
+                    <span className="navbar-toggler-icon"></span>
+                  </button>
+                </li>
               </ul>
             </div>
           </div>
@@ -482,7 +474,7 @@ export default function Navbar() {
         <div
           className="offcanvas offcanvas-end"
           tabIndex={-1}
-          id="offcanvasNavbar"
+          id={OFFCANVAS_NAV_ID}
           aria-labelledby="offcanvasNavbarLabel"
         >
           <div className="offcanvas-header">
@@ -500,88 +492,136 @@ export default function Navbar() {
           <div className="offcanvas-body">
             <ul className="navbar-nav justify-content-end flex-grow-1 gap-1 gap-md-5 pe-3">
               <li className="nav-item">
-                <Link className="nav-link" href="/">
+                <Link className="nav-link" href="/" onClick={closeMobileNav}>
                   ANA SAYFA
                 </Link>
               </li>
               <li className="nav-item">
-                <a className="nav-link" data-bs-toggle="collapse" href="#mobileCategories" role="button">
-                  MAĞAZA <span className="float-end">▼</span>
+                <a className="nav-link" data-bs-toggle="collapse" href="#mobileStoreRoot" role="button" aria-expanded="false" aria-controls="mobileStoreRoot">
+                  MAĞAZA <span className="float-end small">▼</span>
                 </a>
-                <div className="collapse" id="mobileCategories">
-                  <ul className="list-unstyled ps-4 mt-2">
-                    {categories.length > 0 ? (
-                      <>
-                        {storeMainCategories.map((cat) => (
-                          <li key={cat.id} className="mb-2">
-                            <strong className="text-uppercase small d-flex align-items-center gap-2">
-                              {getCategoryIcon(cat.name)} {cat.name}
-                            </strong>
-                            {cat.children && cat.children.length > 0 ? (
-                              <ul className="list-unstyled ps-3 mt-1">
-                                {cat.children.map((child) => (
-                                  <li key={child.id}>
-                                    <Link href={`/urunler?category=${encodeURIComponent(child.slug)}`} className="nav-link small">
-                                      {child.name}
-                                    </Link>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null}
-                          </li>
-                        ))}
-                        {digerCategory ? (
-                          <li className="mb-3">
-                            <Link
-                              href={`/urunler?category=${encodeURIComponent(digerCategory.slug)}`}
-                              className="btn btn-outline-dark btn-sm w-100 text-uppercase fw-semibold"
-                            >
-                              {getCategoryIcon(digerCategory.name)} {digerCategory.name}
-                            </Link>
-                          </li>
-                        ) : null}
-                      </>
-                    ) : null}
-                    <li className="mt-2">
-                      <Link href="/urunler" className="btn btn-dark btn-sm w-100">
-                        Tüm Ürünleri Gör
-                      </Link>
-                    </li>
-                  </ul>
+                <div className="collapse" id="mobileStoreRoot">
+                  <div
+                    className="ps-2 pt-1"
+                    style={{ maxHeight: "min(55vh, 340px)", overflowY: "auto" }}
+                  >
+                    <ul className="list-unstyled mb-0 small">
+                      {categories.length > 0 ? (
+                        <>
+                          {storeMainCategories.map((cat) => {
+                            const hasChildren = cat.children && cat.children.length > 0;
+                            const collapseId = `mobileCat-${cat.id}`;
+                            return (
+                              <li key={cat.id} className="mb-1 border-bottom border-light">
+                                {hasChildren ? (
+                                  <>
+                                    <a
+                                      className="d-flex align-items-center justify-content-between text-decoration-none text-dark py-2 px-1"
+                                      data-bs-toggle="collapse"
+                                      href={`#${collapseId}`}
+                                      role="button"
+                                      aria-expanded="false"
+                                      aria-controls={collapseId}
+                                    >
+                                      <span className="d-flex align-items-center gap-2 text-uppercase fw-semibold" style={{ fontSize: "0.8rem" }}>
+                                        {getCategoryIcon(cat.name)}
+                                        <span>{cat.name}</span>
+                                      </span>
+                                      <span className="text-muted" style={{ fontSize: "0.65rem" }}>▼</span>
+                                    </a>
+                                    <div className="collapse" id={collapseId}>
+                                      <ul className="list-unstyled ps-3 pb-2 m-0">
+                                        {cat.children!.map((child) => (
+                                          <li key={child.id}>
+                                            <Link
+                                              href={`/urunler?category=${encodeURIComponent(child.slug)}`}
+                                              className="nav-link py-1 px-0"
+                                              style={{ fontSize: "0.85rem" }}
+                                              onClick={closeMobileNav}
+                                            >
+                                              {child.name}
+                                            </Link>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <Link
+                                    href={`/urunler?category=${encodeURIComponent(cat.slug)}`}
+                                    className="d-flex align-items-center gap-2 text-decoration-none text-dark py-2 px-1 text-uppercase fw-semibold"
+                                    style={{ fontSize: "0.8rem" }}
+                                    onClick={closeMobileNav}
+                                  >
+                                    {getCategoryIcon(cat.name)}
+                                    {cat.name}
+                                  </Link>
+                                )}
+                              </li>
+                            );
+                          })}
+                          {digerCategory ? (
+                            <li className="mb-2 pt-1">
+                              <Link
+                                href={`/urunler?category=${encodeURIComponent(digerCategory.slug)}`}
+                                className="btn btn-outline-dark btn-sm w-100 text-uppercase fw-semibold rounded-0"
+                                style={{ fontSize: "0.75rem" }}
+                                onClick={closeMobileNav}
+                              >
+                                {getCategoryIcon(digerCategory.name)} {digerCategory.name}
+                              </Link>
+                            </li>
+                          ) : null}
+                        </>
+                      ) : null}
+                      <li className="mt-2 pb-1">
+                        <Link
+                          href="/urunler"
+                          className="btn btn-dark btn-sm w-100 rounded-0"
+                          style={{ fontSize: "0.8rem" }}
+                          onClick={closeMobileNav}
+                        >
+                          Tüm Ürünleri Gör
+                        </Link>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </li>
               <li className="nav-item">
-                <Link className="nav-link" href="/urunler">
+                <Link className="nav-link" href="/urunler" onClick={closeMobileNav}>
                   TÜM ÜRÜNLER
                 </Link>
               </li>
               <li className="nav-item">
-                <Link className="nav-link" href="#">
-                  İLETİŞİM
+                <Link className="nav-link" href="/hakkimizda" onClick={closeMobileNav}>
+                  HAKKIMIZDA
                 </Link>
               </li>
               {isLoggedIn ? (
                 <>
                   <li className="nav-item">
-                    <Link className="nav-link" href="/profil">Hesabım</Link>
+                    <Link className="nav-link" href="/profil" onClick={closeMobileNav}>
+                      Hesabım
+                    </Link>
                   </li>
                   <li className="nav-item">
-                    <Link className="nav-link" href="/sepet">Sepetim ({cartCount})</Link>
+                    <Link className="nav-link" href="/sepet" onClick={closeMobileNav}>
+                      Sepetim ({cartCount})
+                    </Link>
                   </li>
                   {userIsAdmin && (
                     <li className="nav-item">
-                      <Link className="nav-link text-primary" href="/admin/statistics">Yönetim Paneli</Link>
+                      <Link className="nav-link text-primary" href="/admin/statistics" onClick={closeMobileNav}>
+                        Yönetim Paneli
+                      </Link>
                     </li>
                   )}
                   <li className="nav-item">
                     <button
                       onClick={() => {
+                        closeMobileNav();
                         handleLogout();
-                        const offcanvas = document.getElementById("offcanvasNavbar");
-                        if (offcanvas) {
-                          const bsOffcanvas = (window as any).bootstrap?.Offcanvas?.getInstance(offcanvas);
-                          bsOffcanvas?.hide();
-                        }
                       }}
                       className="nav-link btn btn-link p-0 text-start w-100 text-danger"
                       style={{ textDecoration: "none" }}
@@ -595,12 +635,8 @@ export default function Navbar() {
                   <li className="nav-item">
                     <button
                       onClick={() => {
+                        closeMobileNav();
                         setShowLoginModal(true);
-                        const offcanvas = document.getElementById("offcanvasNavbar");
-                        if (offcanvas) {
-                          const bsOffcanvas = (window as any).bootstrap?.Offcanvas?.getInstance(offcanvas);
-                          bsOffcanvas?.hide();
-                        }
                       }}
                       className="nav-link btn btn-link p-0 text-start w-100"
                       style={{ textDecoration: "none" }}
@@ -611,13 +647,9 @@ export default function Navbar() {
                   <li className="nav-item">
                     <button
                       onClick={() => {
+                        closeMobileNav();
                         setFormError(null);
                         setShowRegisterModal(true);
-                        const offcanvas = document.getElementById("offcanvasNavbar");
-                        if (offcanvas) {
-                          const bsOffcanvas = (window as any).bootstrap?.Offcanvas?.getInstance(offcanvas);
-                          bsOffcanvas?.hide();
-                        }
                       }}
                       className="nav-link btn btn-link p-0 text-start w-100"
                       style={{ textDecoration: "none" }}
@@ -679,15 +711,16 @@ export default function Navbar() {
                       required
                     />
                   </div>
-                  <div className="mb-3 form-check">
+                  <div className="mb-3 d-flex align-items-center gap-2 flex-wrap px-1">
                     <input
                       type="checkbox"
-                      className="form-check-input"
+                      className="form-check-input flex-shrink-0 m-0"
+                      style={{ marginTop: 0 }}
                       id="loginRememberMe"
                       checked={loginForm.rememberMe}
                       onChange={(e) => setLoginForm({ ...loginForm, rememberMe: e.target.checked })}
                     />
-                    <label htmlFor="loginRememberMe" className="form-check-label">
+                    <label htmlFor="loginRememberMe" className="form-check-label mb-0" style={{ cursor: "pointer" }}>
                       Beni hatırla
                     </label>
                   </div>

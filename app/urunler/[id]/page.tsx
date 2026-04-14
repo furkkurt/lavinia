@@ -1,19 +1,20 @@
 // @ts-nocheck
 "use client";
 
-import React from "react";
 import SvgSprite from "../../components/SvgSprite";
-import SwiperInit from "../../components/SwiperInit";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import ProductCarousel from "../../components/ProductCarousel";
 import ShortDescription from "../../components/ShortDescription";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { getProduct, getProductsGrid, getProductLocalImages, getProductLocalImageUrl, Product } from "../../lib/api/products";
+import { use, useEffect, useMemo, useState } from "react";
+import { getProduct, getProductsGrid, getProductLocalImages, getProductLocalImageUrl, Product, parseCustomerOptions } from "../../lib/api/products";
 import { getImageUrl } from "../../lib/api/config";
 import { addToCart } from "../../lib/api/cart";
 import { getProductReviews, ProductReviewsResponse } from "../../lib/api/reviews";
+import { colorsInStockForSize, sizesInStockForColor, stockAtMatrix } from "../../lib/productVariantStock";
+
+type GallerySlide = { preview: string; full: string; key: string };
 
 declare global {
   namespace JSX {
@@ -24,7 +25,7 @@ declare global {
 }
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = React.use(params);
+  const { id } = use(params);
   const productId = parseInt(id, 10);
   const [product, setProduct] = useState<Product | null>(null);
   const [localImageUrls, setLocalImageUrls] = useState<Array<{ imageUrl: string }>>([]);
@@ -35,13 +36,144 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartMessage, setCartMessage] = useState<string | null>(null);
   const [cartMessageType, setCartMessageType] = useState<'success' | 'error'>('success');
-  const [imagesReady, setImagesReady] = useState(0);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [selectedSize, setSelectedSize] = useState<string>("");
+  const [selectedColor, setSelectedColor] = useState<string>("");
+
+  /** Ana görsel: tam çözünürlük (`originalUrl`); şerit: küçük (`mediaUrl` / thumb). Yerel `productImages/` için aynı URL. */
+  const galleryItems = useMemo((): GallerySlide[] => {
+    if (!product) return [];
+    const imgs =
+      (product as any).productImages ??
+      (product as any).ProductImages;
+    if (Array.isArray(imgs) && imgs.length > 0) {
+      return imgs
+        .map((img: any, index: number) => {
+          const fullRaw =
+            img.originalUrl ??
+            img.OriginalUrl ??
+            img.imageUrl ??
+            img.ImageUrl ??
+            img.mediaUrl ??
+            img.MediaUrl ??
+            product.thumbnailImageUrl;
+          const previewRaw =
+            img.mediaUrl ??
+            img.MediaUrl ??
+            img.originalUrl ??
+            img.OriginalUrl ??
+            img.imageUrl ??
+            img.ImageUrl ??
+            product.thumbnailImageUrl;
+          if (!fullRaw) return null;
+          const idPart = img.id ?? img.Id ?? index;
+          return {
+            full: String(fullRaw),
+            preview: String(previewRaw || fullRaw),
+            key: `m-${idPart}-${index}`,
+          };
+        })
+        .filter(Boolean) as GallerySlide[];
+    }
+    return localImageUrls
+      .map((x) => x.imageUrl)
+      .filter(Boolean)
+      .map((url, index) => ({
+        full: String(url),
+        preview: String(url),
+        key: `local-${index}`,
+      }));
+  }, [product, localImageUrls]);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [productId]);
+
+  useEffect(() => {
+    if (galleryItems.length > 0 && activeImageIndex >= galleryItems.length) {
+      setActiveImageIndex(0);
+    }
+  }, [galleryItems, activeImageIndex]);
+
+  const sizeList = useMemo(() => {
+    if (!product) return [];
+    const s = parseCustomerOptions(product.customerSizeOptions);
+    return s.length > 0 ? s : ["XS", "S", "M", "L", "XL", "XXL"];
+  }, [product]);
+
+  const hasMatrix = !!(product?.customerVariantStock?.colors?.length);
+
+  const colorsForUi = useMemo(() => {
+    if (!product) return [];
+    if (hasMatrix && product.customerVariantStock) {
+      return product.customerVariantStock.colors
+        .map((c) => c.name)
+        .filter((n) => n && String(n).trim());
+    }
+    return parseCustomerOptions(product.customerColorOptions);
+  }, [product, hasMatrix]);
+
+  const sizesForUi = useMemo(() => {
+    if (!product) return sizeList;
+    if (!hasMatrix || !product.customerVariantStock) return sizeList;
+    return sizeList;
+  }, [product, hasMatrix, sizeList]);
+
+  const lineStock = useMemo((): number | null => {
+    if (!product || !product.stockTrackingIsEnabled) return null;
+    if (hasMatrix && product.customerVariantStock) {
+      if (!selectedSize?.trim() || !selectedColor?.trim()) return 0;
+      return stockAtMatrix(product.customerVariantStock, selectedColor, selectedSize);
+    }
+    return product.stockQuantity ?? 0;
+  }, [product, hasMatrix, selectedSize, selectedColor]);
+
+  useEffect(() => {
+    if (!product?.customerVariantStock?.colors?.length) return;
+    const m = product.customerVariantStock;
+    const cOk = colorsInStockForSize(m, selectedSize);
+    const sOk = sizesInStockForColor(m, selectedColor, sizeList);
+    if (selectedSize && cOk.length === 0) {
+      const sz = sizeList.find((s) => colorsInStockForSize(m, s).length > 0);
+      if (sz) {
+        setSelectedSize(sz);
+        const cols = colorsInStockForSize(m, sz);
+        if (cols[0]) setSelectedColor(cols[0]);
+      }
+      return;
+    }
+    if (cOk.length > 0 && selectedColor && !cOk.includes(selectedColor)) {
+      setSelectedColor(cOk[0]);
+      return;
+    }
+    if (sOk.length > 0 && selectedSize && !sOk.includes(selectedSize)) {
+      setSelectedSize(sOk[0]);
+    }
+  }, [product, selectedSize, selectedColor, sizeList]);
+
+  useEffect(() => {
+    if (lineStock == null || lineStock < 0) return;
+    if (quantity > lineStock) setQuantity(Math.max(1, lineStock));
+  }, [lineStock, quantity]);
 
   const handleAddToCart = async () => {
     if (!product) return;
+    const legacyColors = parseCustomerOptions(product.customerColorOptions);
+    const matrixColorCount = product.customerVariantStock?.colors?.length ?? 0;
+    const needsColor = matrixColorCount > 0 || legacyColors.length > 0;
+    if (needsColor && !selectedColor) {
+      setCartMessageType("error");
+      setCartMessage("Lütfen bir renk seçin.");
+      return;
+    }
     setAddingToCart(true);
     setCartMessage(null);
-    const result = await addToCart(product.id, quantity);
+    const result = await addToCart(
+      product.id,
+      quantity,
+      selectedSize || undefined,
+      needsColor ? selectedColor : undefined
+    );
     if (result.success) {
       setCartMessageType('success');
       setCartMessage("Ürün sepete eklendi!");
@@ -71,6 +203,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
         setProduct(productData);
 
+        const sizes = parseCustomerOptions(productData?.customerSizeOptions);
+        const colors = parseCustomerOptions(productData?.customerColorOptions);
+        const defaultSizes = ["XS", "S", "M", "L", "XL", "XXL"];
+        const szList = sizes.length > 0 ? sizes : defaultSizes;
+        const mtx = productData?.customerVariantStock;
+        if (mtx?.colors?.length) {
+          const firstSize = szList.find((sz) => colorsInStockForSize(mtx, sz).length > 0) || szList[0] || "";
+          setSelectedSize(firstSize);
+          const withStock = colorsInStockForSize(mtx, firstSize);
+          setSelectedColor(withStock[0] || mtx.colors[0]?.name || "");
+        } else {
+          setSelectedSize(szList[0] || "");
+          setSelectedColor(colors[0] || "");
+        }
+
         const hasMediaImages = productData?.productImages && (productData.productImages as any[])?.length > 0;
         if (!hasMediaImages) {
           const localFiles = await getProductLocalImages(productId);
@@ -78,8 +225,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             setLocalImageUrls(localFiles.map((f) => ({ imageUrl: getProductLocalImageUrl(productId, f) })));
           }
         }
-        setImagesReady((c) => c + 1);
-
         // Fetch reviews
         const reviewsData = await getProductReviews(productId);
         if (!isMounted) return;
@@ -127,8 +272,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <SvgSprite />
-      <SwiperInit reinitKey={imagesReady} />
-      
+
       <div className="preloader text-white fs-6 text-uppercase overflow-hidden"></div>
 
       <div className="search-popup">
@@ -222,72 +366,105 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="row">
               <div className="col-md-6 mb-4">
                 <div className="product-preview">
-                  <div className="swiper product-large-slider mb-3" style={{ position: "relative" }}>
-                    <div className="swiper-wrapper">
-                      {(() => {
-                        const displayImages = (product.productImages && (product.productImages as any[]).length > 0)
-                          ? (product.productImages as any[]).map((img) => ({ imageUrl: img.originalUrl || img.imageUrl || img.mediaUrl }))
-                          : localImageUrls;
-                        return displayImages.length > 0 ? (
-                        displayImages.map((img, idx) => (
-                          <div key={idx} className="swiper-slide">
+                  <div className="product-main-gallery product-main-stage mb-3 position-relative">
+                    {(() => {
+                      const mainUrl =
+                        galleryItems.length > 0
+                          ? galleryItems[Math.min(activeImageIndex, galleryItems.length - 1)].full
+                          : product.thumbnailImageUrl;
+                      const mainSrc = getImageUrl(mainUrl);
+                      return (
+                        <>
+                          <div className="d-block text-center bg-light position-relative">
                             <img
-                              src={getImageUrl(img.imageUrl || product.thumbnailImageUrl)}
-                              alt={`${product.name} - Görsel ${idx + 1}`}
+                              key={`main-${activeImageIndex}`}
+                              src={mainSrc}
+                              alt={product.name}
                               className="img-fluid"
-                              style={{ width: "100%", height: "auto" }}
+                              style={{ width: "100%", maxHeight: "560px", objectFit: "contain" }}
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
+                                (e.target as HTMLImageElement).src = "/images/product-item-1.jpg";
                               }}
                             />
+                            <a
+                              href={mainSrc}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="small d-inline-block mt-2 mb-1"
+                              title="Tam boyutta aç"
+                            >
+                              Tam boyutta aç
+                            </a>
                           </div>
-                        ))
-                        ) : (
-                        <div className="swiper-slide">
-                          <img
-                            src={getImageUrl(product.thumbnailImageUrl)}
-                            alt={product.name}
-                            className="img-fluid"
-                            style={{ width: "100%", height: "auto" }}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
-                            }}
-                          />
-                        </div>
-                        );
-                      })()}
-                    </div>
-                    <div className="swiper-button-prev product-slider-prev"></div>
-                    <div className="swiper-button-next product-slider-next"></div>
-                    <div className="swiper-pagination"></div>
+                          {galleryItems.length > 1 && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-light border position-absolute top-50 start-0 translate-middle-y ms-1"
+                                style={{ zIndex: 3 }}
+                                aria-label="Önceki görsel"
+                                onClick={() =>
+                                  setActiveImageIndex(
+                                    (i) => (i - 1 + galleryItems.length) % galleryItems.length
+                                  )
+                                }
+                              >
+                                ‹
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-light border position-absolute top-50 end-0 translate-middle-y me-1"
+                                style={{ zIndex: 3 }}
+                                aria-label="Sonraki görsel"
+                                onClick={() =>
+                                  setActiveImageIndex((i) => (i + 1) % galleryItems.length)
+                                }
+                              >
+                                ›
+                              </button>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
-                  {(() => {
-                    const imgs = (product.productImages && (product.productImages as any[]).length > 0)
-                      ? (product.productImages as any[]).map((img) => ({ imageUrl: img.mediaUrl || img.imageUrl }))
-                      : localImageUrls;
-                    return imgs.length > 1 && (
-                    <div className="swiper product-thumbnail-slider">
-                      <div className="swiper-wrapper">
-                        {imgs.map((img, idx) => (
-                          <div key={idx} className="swiper-slide" style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                            <div style={{ width: "100%", height: "120px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <img
-                                src={getImageUrl(img.imageUrl || product.thumbnailImageUrl)}
-                                alt={`${product.name} - Thumbnail ${idx + 1}`}
-                                className="img-fluid"
-                                style={{ objectFit: "contain", width: "100%", height: "100%" }}
-                                loading="lazy"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = '/images/product-item-1.jpg';
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                  {galleryItems.length > 1 && (
+                    <div className="product-thumb-strip d-flex flex-wrap gap-2 justify-content-center align-items-center">
+                      {galleryItems.map((slide, idx) => {
+                        const thumbSrc = getImageUrl(slide.preview);
+                        return (
+                          <button
+                            key={slide.key}
+                            type="button"
+                            className={`p-1 border bg-white rounded-0 ${idx === activeImageIndex ? "border-dark border-2" : "border-secondary"}`}
+                            onClick={() => setActiveImageIndex(idx)}
+                            aria-label={`Görsel ${idx + 1}`}
+                            aria-current={idx === activeImageIndex ? "true" : undefined}
+                            style={{ width: 88, height: 88, flex: "0 0 auto", overflow: "hidden", position: "relative" }}
+                          >
+                            <img
+                              src={thumbSrc}
+                              alt=""
+                              width={84}
+                              height={84}
+                              className="img-fluid"
+                              loading="lazy"
+                              decoding="async"
+                              draggable={false}
+                              style={{
+                                objectFit: "contain",
+                                width: "100%",
+                                height: "100%",
+                              }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "/images/product-item-1.jpg";
+                              }}
+                            />
+                          </button>
+                        );
+                      })}
                     </div>
-                    );
-                  })()}
+                  )}
                 </div>
               </div>
 
@@ -328,6 +505,74 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     <div className="mb-4" dangerouslySetInnerHTML={{ __html: product.description }} />
                   )}
 
+                  <div className="product-choices mb-4">
+                    <div className="mb-3">
+                      <span className="d-block text-uppercase small fw-semibold mb-2" style={{ letterSpacing: "0.06em" }}>
+                        Beden
+                      </span>
+                      <div className="d-flex flex-wrap gap-2" role="group" aria-label="Beden seçimi">
+                        {sizesForUi.map((sz) => {
+                          const m = product.customerVariantStock;
+                          const qty =
+                            hasMatrix && m && selectedColor
+                              ? stockAtMatrix(m, selectedColor, sz)
+                              : null;
+                          const oos = hasMatrix && selectedColor != null && selectedColor !== "" && (qty ?? 0) < 1;
+                          return (
+                            <button
+                              key={sz}
+                              type="button"
+                              className={`btn btn-sm rounded-0 px-3 py-2 ${selectedSize === sz ? "btn-dark" : "btn-outline-dark"}${oos ? " opacity-50" : ""}`}
+                              disabled={oos}
+                              title={oos ? "Bu bedende seçili renk için stok yok" : undefined}
+                              onClick={() => {
+                                if (!oos) setSelectedSize(sz);
+                              }}
+                            >
+                              {sz}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {colorsForUi.length > 0 ? (
+                      <div className="mb-1">
+                        <span className="d-block text-uppercase small fw-semibold mb-2" style={{ letterSpacing: "0.06em" }}>
+                          Renk
+                        </span>
+                        <div className="d-flex flex-wrap gap-2" role="group" aria-label="Renk seçimi">
+                          {colorsForUi.map((c) => {
+                            const m = product.customerVariantStock;
+                            const qty =
+                              hasMatrix && m && selectedSize
+                                ? stockAtMatrix(m, c, selectedSize)
+                                : null;
+                            const oos =
+                              hasMatrix &&
+                              selectedSize != null &&
+                              selectedSize !== "" &&
+                              (qty ?? 0) < 1;
+                            return (
+                              <button
+                                key={c}
+                                type="button"
+                                className={`btn btn-sm rounded-0 px-3 py-2 ${selectedColor === c ? "btn-dark" : "btn-outline-secondary border-dark"}${oos ? " opacity-50" : ""}`}
+                                style={{ minWidth: "2.75rem" }}
+                                disabled={oos}
+                                title={oos ? "Bu renkte seçili beden için stok yok" : undefined}
+                                onClick={() => {
+                                  if (!oos) setSelectedColor(c);
+                                }}
+                              >
+                                {c}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <div className="product-quantity mb-4">
                     <label className="d-block mb-2 text-uppercase">Adet:</label>
                     <div className="qty-number d-flex align-items-center">
@@ -343,14 +588,23 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                         id="quantity"
                         name="quantity"
                         min="1"
+                        max={lineStock != null && lineStock > 0 ? lineStock : undefined}
                         value={quantity}
-                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10) || 1;
+                          const cap = lineStock != null && lineStock > 0 ? lineStock : Number.MAX_SAFE_INTEGER;
+                          setQuantity(Math.min(cap, Math.max(1, n)));
+                        }}
                         className="form-control text-center"
                       />
                       <button
                         type="button"
                         className="quntity-button quantity-right-plus"
-                        onClick={() => setQuantity((q) => q + 1)}
+                        onClick={() =>
+                          setQuantity((q) =>
+                            lineStock != null && lineStock > 0 ? Math.min(lineStock, q + 1) : q + 1
+                          )
+                        }
                       >
                         +
                       </button>
@@ -360,10 +614,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <div className="product-actions d-flex gap-3 mb-4">
                     <button 
                       className="btn btn-dark btn-lg text-uppercase flex-grow-1"
-                      disabled={product.stockQuantity === 0 || addingToCart}
+                      disabled={addingToCart || (lineStock != null && lineStock < 1)}
                       onClick={handleAddToCart}
                     >
-                      {addingToCart ? "Ekleniyor..." : (product.stockQuantity && product.stockQuantity > 0 ? "Sepete Ekle" : "Stokta Yok")}
+                      {addingToCart
+                        ? "Ekleniyor..."
+                        : lineStock != null && lineStock < 1
+                          ? "Stokta Yok"
+                          : "Sepete Ekle"}
                     </button>
                     <button className="btn btn-outline-dark btn-lg">
                       <svg width="24" height="24" viewBox="0 0 24 24">
@@ -377,10 +635,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     </div>
                   )}
 
-                  {product.stockQuantity !== undefined && (
-                    <p className={product.stockQuantity > 0 ? "text-success mb-0" : "text-danger mb-0"}>
-                      <strong>{product.stockQuantity > 0 ? "Stokta var" : "Stokta yok"}</strong>
-                      {product.stockQuantity > 0 && ` (${product.stockQuantity} adet)`}
+                  {product.stockTrackingIsEnabled && lineStock != null && (
+                    <p className={lineStock > 0 ? "text-success mb-0" : "text-danger mb-0"}>
+                      <strong>{lineStock > 0 ? "Stokta var" : "Stokta yok"}</strong>
+                      {lineStock > 0 && ` (${lineStock} adet)`}
                     </p>
                   )}
 

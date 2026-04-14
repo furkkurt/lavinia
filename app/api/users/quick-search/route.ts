@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://31.210.43.159:5000';
+import { bearerFromRequest, serverInternalApiBase } from '@/app/lib/serverInternalApiBase';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,9 +11,11 @@ export async function GET(request: NextRequest) {
     if (name) params.append('Name', name);
     if (email) params.append('Email', email);
     
-    const response = await fetch(`${API_BASE_URL}/api/users/quick-search?${params.toString()}`, {
+    const response = await fetch(`${serverInternalApiBase()}/api/users/quick-search?${params.toString()}`, {
       method: 'GET',
-      credentials: 'include',
+      headers: {
+        ...bearerFromRequest(request),
+      },
     });
 
     const data = await response.json().catch(() => ({}));
