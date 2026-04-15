@@ -61,7 +61,7 @@ export default function EditProductPage() {
   const sizeLabels = useMemo(() => {
     const raw = typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : "";
     const p = parseCustomerOptions(raw);
-    return p.length > 0 ? p : ["XS", "S", "M", "L", "XL", "XXL"];
+    return p.length > 0 ? p : ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
   }, [formData.customerSizeOptions]);
 
   useEffect(() => {
@@ -140,7 +140,7 @@ export default function EditProductPage() {
               ? product.customerSizeOptions.join(", ")
               : String(product.customerSizeOptions);
         const parsedSizes = parseCustomerOptions(sizeOptStr);
-        const sizeListForRows = parsedSizes.length > 0 ? parsedSizes : ["XS", "S", "M", "L", "XL", "XXL"];
+        const sizeListForRows = parsedSizes.length > 0 ? parsedSizes : ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
         setVariantRows(variantRowsFromProductMatrix(product, sizeListForRows));
       }
       setFetching(false);
@@ -538,7 +538,7 @@ export default function EditProductPage() {
                   name="customerSizeOptions"
                   value={typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : ""}
                   onChange={handleInputChange}
-                  placeholder="Boş = XS, S, M, L, XL, XXL — özel: 36, 38, 40 veya S, M, L"
+                  placeholder="Boş = Standart, XS, S, M, L, XL, XXL — özel: 36, 38, 40 veya S, M, L"
                   autoComplete="off"
                 />
                 <small className="form-text text-muted">

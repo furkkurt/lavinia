@@ -189,7 +189,11 @@ async function proxy(
   try {
     const { status, statusText, headers: resHeaders, stream } =
       await nodeRequest(url, method, headers, body, timeoutMs);
-    return new NextResponse(toWebReadable(stream), {
+      
+    // Next.js (and the Fetch spec) strictly forbids bodies for 204 and 304 responses
+    const responseBody = (status === 204 || status === 304) ? null : toWebReadable(stream);
+    
+    return new NextResponse(responseBody, {
       status,
       statusText,
       headers: resHeaders,

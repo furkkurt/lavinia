@@ -40,7 +40,7 @@ export function VariantStockEditor({ sizeLabels, rows, onChange }: Props) {
         </button>
       </div>
       <p className="small text-muted mb-3">
-        Her renk için isim girin; satırdaki beden kutularına stok yazın. Üstteki beden alanı boşsa sütunlar XS–XXL olur.
+        Her renk için isim girin; satırdaki beden kutularına stok yazın. Üstteki beden alanı boşsa sütunlar Standart, XS–XXL olur.
         Mağazada renk ve stok bu tablodan gelir.
       </p>
       {rows.length === 0 ? (
