@@ -98,7 +98,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const sizeList = useMemo(() => {
     if (!product) return [];
     const s = parseCustomerOptions(product.customerSizeOptions);
-    return s.length > 0 ? s : ["XS", "S", "M", "L", "XL", "XXL"];
+    return s.length > 0 ? s : ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
   }, [product]);
 
   const hasMatrix = !!(product?.customerVariantStock?.colors?.length);
@@ -205,7 +205,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
         const sizes = parseCustomerOptions(productData?.customerSizeOptions);
         const colors = parseCustomerOptions(productData?.customerColorOptions);
-        const defaultSizes = ["XS", "S", "M", "L", "XL", "XXL"];
+        const defaultSizes = ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
         const szList = sizes.length > 0 ? sizes : defaultSizes;
         const mtx = productData?.customerVariantStock;
         if (mtx?.colors?.length) {
