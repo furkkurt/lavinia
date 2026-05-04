@@ -5,7 +5,16 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SvgSprite from "../components/SvgSprite";
-import { getUserOrders, getUserOrder, OrderListItem, OrderDetail, downloadInvoicePdf, cancelUserOrder } from "../lib/api/orders";
+import {
+  getUserOrders,
+  getUserOrder,
+  getUserOrderShipments,
+  OrderListItem,
+  OrderDetail,
+  downloadInvoicePdf,
+  cancelUserOrder,
+  UserOrderShipment,
+} from "../lib/api/orders";
 import { createReview } from "../lib/api/reviews";
 import {
   getAddresses, createAddress, updateAddress, deleteAddress,
@@ -28,6 +37,10 @@ export default function ProfilePage() {
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [orderDetailLoading, setOrderDetailLoading] = useState(false);
   const [orderCancelSubmitting, setOrderCancelSubmitting] = useState(false);
+  /** Kargo / takip satırları (yönetimden eklendiyse). Boş dizi = yüklendi, veri yok. */
+  const [orderShipmentsById, setOrderShipmentsById] = useState<Record<number, UserOrderShipment[]>>({});
+  /** Kargo API yüklenemedi (ağ/401/404 vb.) */
+  const [orderShipmentsErrorById, setOrderShipmentsErrorById] = useState<Record<number, boolean>>({});
 
   // Addresses
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
@@ -130,16 +143,36 @@ export default function ProfilePage() {
     }
     setExpandedOrder(orderId);
     setOrderDetailLoading(true);
-    const detail = await getUserOrder(orderId);
+    const [detail, shipRes] = await Promise.all([
+      getUserOrder(orderId),
+      getUserOrderShipments(orderId),
+    ]);
     setOrderDetail(detail);
+    if (shipRes) {
+      setOrderShipmentsById((prev) => ({ ...prev, [orderId]: shipRes.items ?? [] }));
+      setOrderShipmentsErrorById((prev) => ({ ...prev, [orderId]: false }));
+    } else {
+      setOrderShipmentsById((prev) => ({ ...prev, [orderId]: [] }));
+      setOrderShipmentsErrorById((prev) => ({ ...prev, [orderId]: true }));
+    }
     setOrderDetailLoading(false);
   };
 
   const refreshOrdersAndDetail = async (orderId: number) => {
     const list = await getUserOrders();
     setOrders(list);
-    const detail = await getUserOrder(orderId);
+    const [detail, shipRes] = await Promise.all([
+      getUserOrder(orderId),
+      getUserOrderShipments(orderId),
+    ]);
     setOrderDetail(detail);
+    if (shipRes) {
+      setOrderShipmentsById((prev) => ({ ...prev, [orderId]: shipRes.items ?? [] }));
+      setOrderShipmentsErrorById((prev) => ({ ...prev, [orderId]: false }));
+    } else {
+      setOrderShipmentsById((prev) => ({ ...prev, [orderId]: [] }));
+      setOrderShipmentsErrorById((prev) => ({ ...prev, [orderId]: true }));
+    }
   };
 
   const handleCancelOrder = async (orderId: number) => {
@@ -344,6 +377,66 @@ export default function ProfilePage() {
                                 {orderDetail.shippingAddress.city && `, ${orderDetail.shippingAddress.city}`}
                               </div>
                             )}
+                            <div
+                              className="mb-3 p-3"
+                              style={{ background: "#e7f1ff", border: "1px solid #b6d4fe" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                                <span
+                                  className="text-muted small text-uppercase"
+                                  style={{ letterSpacing: "0.04em" }}
+                                >
+                                  Kargo takibi
+                                </span>
+                              </div>
+                              {orderShipmentsErrorById[order.id] ? (
+                                <p className="small text-danger mb-0">
+                                  Kargo bilgisi yüklenemedi. Sayfayı yenileyip tekrar deneyin; sorun sürerse
+                                  destekle iletişime geçin.
+                                </p>
+                              ) : (orderShipmentsById[order.id] ?? []).length === 0 ? (
+                                <p className="small text-muted mb-0">
+                                  <strong className="text-body">Henüz takip numarası yok.</strong> Kargo
+                                  yönetimde siparişe bağlandığında (HepsiJET / takip no) burada{" "}
+                                  <strong>«Kargomu takip et»</strong> butonu görünecektir.
+                                </p>
+                              ) : (
+                                (orderShipmentsById[order.id] ?? []).map((s) => (
+                                  <div
+                                    key={s.id}
+                                    className="d-flex flex-wrap align-items-center gap-2 mt-1"
+                                  >
+                                    {s.hepsijetTrackingUrl ? (
+                                      <a
+                                        href={s.hepsijetTrackingUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-sm btn-primary"
+                                        style={{ borderRadius: 0 }}
+                                      >
+                                        Kargomu takip et
+                                      </a>
+                                    ) : s.trackingNumber ? (
+                                      <a
+                                        href={`https://hepsijet.com/gonderi-takibi/${encodeURIComponent(s.trackingNumber.trim())}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-sm btn-primary"
+                                        style={{ borderRadius: 0 }}
+                                      >
+                                        Kargomu takip et
+                                      </a>
+                                    ) : null}
+                                    {s.trackingNumber ? (
+                                      <span className="small">Takip no: {s.trackingNumber}</span>
+                                    ) : (
+                                      <span className="small text-muted">Takip numarası yok</span>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
                             <table className="table table-sm">
                               <thead>
                                 <tr>
@@ -372,7 +465,24 @@ export default function ProfilePage() {
                                       </div>
                                     </td>
                                     <td>{item.quantity}</td>
-                                    <td>{item.productPriceString}</td>
+                                    <td>
+                                      {item.compareAtPrice != null &&
+                                      item.compareAtPrice > item.productPrice ? (
+                                        <span>
+                                          <del
+                                            className="text-muted small d-block"
+                                            style={{ fontSize: "0.85em" }}
+                                          >
+                                            {item.compareAtPriceString}
+                                          </del>
+                                          <span className="text-danger fw-semibold">
+                                            {item.productPriceString}
+                                          </span>
+                                        </span>
+                                      ) : (
+                                        item.productPriceString
+                                      )}
+                                    </td>
                                     <td>{item.totalString}</td>
                                     {orderDetail.orderStatus === 70 && (
                                       <td>

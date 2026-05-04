@@ -62,6 +62,7 @@ function ProductsContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [jumpInput, setJumpInput] = useState("1");
   const productsPerPage = 12;
   const [total, setTotal] = useState(0);
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
@@ -96,6 +97,10 @@ function ProductsContent() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, brandSlug]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sortOption]);
 
   useEffect(() => {
     let isMounted = true;
@@ -171,9 +176,20 @@ function ProductsContent() {
 
   const totalPages = Math.ceil(total / productsPerPage);
 
+  useEffect(() => {
+    setJumpInput(String(currentPage));
+  }, [currentPage]);
+
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    const p = Math.max(1, Math.min(totalPages || 1, page));
+    setCurrentPage(p);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goToJumpPage = () => {
+    const n = parseInt(jumpInput, 10);
+    if (Number.isNaN(n)) return;
+    handlePageChange(n);
   };
 
   const isProductOutOfStock = (p: Product) =>
@@ -261,14 +277,18 @@ function ProductsContent() {
                         <span className="stock-badge">Son {product.stockQuantity} ürün!</span>
                       )}
                       {(() => {
-                        const sp = product.specialPrice;
-                        const now = new Date();
-                        const active = sp && sp > 0 && sp < product.price
-                          && (!product.specialPriceStart || new Date(product.specialPriceStart) <= now)
-                          && (!product.specialPriceEnd || new Date(product.specialPriceEnd) >= now);
-                        return active ? (
-                          <span className="discount-badge">%{Math.round((1 - sp / product.price) * 100)} İndirim</span>
-                        ) : null;
+                        const c = product.calculatedProductPrice;
+                        const eff = c?.price ?? product.price;
+                        const old = c?.oldPrice;
+                        const pct = c?.percentOfSaving;
+                        if (old != null && old > eff) {
+                          return (
+                            <span className="discount-badge">
+                              %{pct && pct > 0 ? pct : Math.round((1 - eff / old) * 100)} İndirim
+                            </span>
+                          );
+                        }
+                        return null;
                       })()}
                       {isProductOutOfStock(product) && (
                         <span className="out-of-stock-badge">Tükendi</span>
@@ -296,15 +316,23 @@ function ProductsContent() {
                       </h5>
                       <Link href={`/urunler/${product.id}`} className="text-decoration-none" data-after="Sepete Ekle">
                         {(() => {
-                          const sp = product.specialPrice;
-                          const now = new Date();
-                          const active = sp && sp > 0 && sp < product.price
-                            && (!product.specialPriceStart || new Date(product.specialPriceStart) <= now)
-                            && (!product.specialPriceEnd || new Date(product.specialPriceEnd) >= now);
-                          return active ? (
-                            <><del className="text-muted me-1">₺{product.price.toFixed(2)}</del> <span className="text-danger fw-bold">₺{sp.toFixed(2)}</span></>
-                          ) : (
-                            <span>{product.price ? `₺${product.price.toFixed(2)}` : "Fiyat Belirtilmemiş"}</span>
+                          const c = product.calculatedProductPrice;
+                          const eff = c?.price ?? product.price;
+                          const old = c?.oldPrice;
+                          if (old != null && old > eff) {
+                            return (
+                              <>
+                                <del className="text-muted me-1">₺{old.toFixed(2)}</del>{" "}
+                                <span className="text-danger fw-bold">₺{eff.toFixed(2)}</span>
+                              </>
+                            );
+                          }
+                          return (
+                            <span>
+                              {eff != null && eff > 0
+                                ? `₺${Number(eff).toFixed(2)}`
+                                : "Fiyat Belirtilmemiş"}
+                            </span>
                           );
                         })()}
                       </Link>
@@ -315,45 +343,127 @@ function ProductsContent() {
             </div>
           )}
 
-          {/* Pagination */}
+          {/* Pagination: equal-size controls; space between İlk/←/→/Son and page numbers */}
           {totalPages > 1 && (
             <nav aria-label="Sayfa navigasyonu" className="mt-5">
-              <ul className="pagination justify-content-center">
-                <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <div className="d-flex justify-content-center align-items-center flex-wrap gap-2">
+                <div className="d-flex gap-1 align-items-center pe-2 pe-md-3 me-md-1 border-end border-secondary-subtle">
                   <button
-                    className="page-link"
+                    type="button"
+                    className={`page-link ${currentPage === 1 ? "disabled" : ""}`}
+                    style={{
+                      minWidth: "2.75rem",
+                      minHeight: "2.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1}
+                    aria-label="İlk sayfa"
+                  >
+                    İlk
+                  </button>
+                  <button
+                    type="button"
+                    className={`page-link ${currentPage === 1 ? "disabled" : ""}`}
+                    style={{
+                      minWidth: "2.75rem",
+                      minHeight: "2.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                     aria-label="Önceki sayfa"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                       <use xlinkHref="#arrow-left"></use>
                     </svg>
                   </button>
-                </li>
+                </div>
 
-                {getPageNumbers().map((page) => (
-                  <li key={page} className={`page-item ${currentPage === page ? "active" : ""}`}>
-                    <button className="page-link" onClick={() => handlePageChange(page)}>
-                      {page}
-                    </button>
-                  </li>
-                ))}
+                <ul className="pagination mb-0 mx-0 flex-wrap justify-content-center gap-1">
+                  {getPageNumbers().map((page) => (
+                    <li key={page} className={`page-item ${currentPage === page ? "active" : ""}`}>
+                      <button
+                        type="button"
+                        className="page-link"
+                        style={{
+                          minWidth: "2.75rem",
+                          minHeight: "2.75rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        onClick={() => handlePageChange(page)}
+                      >
+                        {page}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
 
-                <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                <div className="d-flex gap-1 align-items-center ps-2 ps-md-3 ms-md-1 border-start border-secondary-subtle">
                   <button
-                    className="page-link"
+                    type="button"
+                    className={`page-link ${currentPage === totalPages ? "disabled" : ""}`}
+                    style={{
+                      minWidth: "2.75rem",
+                      minHeight: "2.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
                     aria-label="Sonraki sayfa"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                       <use xlinkHref="#arrow-right"></use>
                     </svg>
                   </button>
-                </li>
-              </ul>
-              <div className="text-center mt-3">
+                  <button
+                    type="button"
+                    className={`page-link ${currentPage === totalPages ? "disabled" : ""}`}
+                    style={{
+                      minWidth: "2.75rem",
+                      minHeight: "2.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage === totalPages}
+                    aria-label="Son sayfa"
+                  >
+                    Son
+                  </button>
+                </div>
+              </div>
+              <div className="d-flex flex-column flex-sm-row align-items-center justify-content-center gap-2 mt-3">
+                <div className="d-flex align-items-center gap-2">
+                  <label htmlFor="urunler-page-jump" className="small text-muted mb-0">
+                    Sayfaya git
+                  </label>
+                  <input
+                    id="urunler-page-jump"
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    className="form-control form-control-sm"
+                    style={{ width: "4.5rem" }}
+                    value={jumpInput}
+                    onChange={(e) => setJumpInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") goToJumpPage();
+                    }}
+                  />
+                  <button type="button" className="btn btn-sm btn-outline-dark" onClick={goToJumpPage}>
+                    Git
+                  </button>
+                </div>
                 <small className="text-muted">
                   Sayfa {currentPage} / {totalPages} (Toplam {total} ürün)
                 </small>

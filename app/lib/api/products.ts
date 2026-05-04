@@ -1,21 +1,44 @@
 import { apiFetch, apiFetchMultipart, PUBLIC_ASSET_BASE_URL } from './config';
+import { normalizeCustomerVariantStockFromApi } from '../productVariantStock';
+
+function normalizeSizeLabelToken(s: string): string {
+  const t = s.trim();
+  if (/^stok$/i.test(t)) return "Standart";
+  return t;
+}
 
 /** Public API dizisi veya admin ham string (JSON / virgülle ayrılmış) → etiket listesi */
 export function parseCustomerOptions(raw: string | string[] | undefined | null): string[] {
   if (raw == null) return [];
-  if (Array.isArray(raw)) return raw.map((s) => String(s).trim()).filter(Boolean);
+  const mapList = (arr: string[]) => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const x of arr) {
+      const n = normalizeSizeLabelToken(String(x));
+      if (!n) continue;
+      const lk = n.toLowerCase();
+      if (seen.has(lk)) continue;
+      seen.add(lk);
+      out.push(n);
+    }
+    return out;
+  };
+  if (Array.isArray(raw)) return mapList(raw.map((s) => String(s).trim()).filter(Boolean));
   const t = String(raw).trim();
   if (!t) return [];
   if (t.startsWith('[')) {
     try {
       const j = JSON.parse(t) as unknown;
-      if (Array.isArray(j)) return j.map((x) => String(x).trim()).filter(Boolean);
+      if (Array.isArray(j)) return mapList(j.map((x) => String(x).trim()).filter(Boolean));
     } catch {
       /* fall through */
     }
   }
-  return t.split(/[,;\n\r]+/).map((s) => s.trim()).filter(Boolean);
+  return mapList(t.split(/[,;\n\r]+/).map((s) => s.trim()).filter(Boolean));
 }
+
+/** Admin: mağaza rengi → galeri görseli (ProductMedia id). */
+export type CustomerColorImageRow = { color: string; mediaId: number | null };
 
 export interface Product {
   id: number;
@@ -33,6 +56,12 @@ export interface Product {
   price: number;
   oldPrice?: number;
   specialPrice?: number;
+  /** API: PublicProductApi grid / bestsellers — sunucu hesaplı etkin fiyat. */
+  calculatedProductPrice?: {
+    price: number;
+    oldPrice?: number | null;
+    percentOfSaving?: number;
+  };
   specialPriceStart?: string;
   specialPriceEnd?: string;
   isPublished: boolean;
@@ -56,10 +85,15 @@ export interface Product {
   customerSizeOptions?: string[] | string;
   /** Mağaza: renk listesi (boşsa renk yok). Admin: virgül/JSON string veya dizi. Matris varsa API renkleri matristen döner. */
   customerColorOptions?: string[] | string;
-  /** Public GET: renk × beden stok (API camelCase). */
-  customerVariantStock?: { colors: Array<{ name: string; stocks: Record<string, number> }> } | null;
+  /** Public GET: renk × beden stok (API; `getProduct` içinde `stocks` biçimine normalize edilir). */
+  customerVariantStock?: {
+    standardSizeLabel?: string;
+    colors: Array<{ name: string; stocks: Record<string, number>; imageUrl?: string | null }>;
+  } | null;
   /** Admin FormData: JSON string şema <c>{"colors":[{"name":"...","stocks":{"S":1}}]}</c> */
   customerVariantStockJson?: string;
+  /** Admin GET/PUT: renk başına galeri görseli eşlemesi */
+  customerColorImages?: CustomerColorImageRow[];
 }
 
 export interface ProductGridParams {
@@ -171,7 +205,17 @@ export async function getProduct(id: number): Promise<Product | null> {
     return null;
   }
 
-  return response.data || null;
+  const data = response.data;
+  if (!data) return null;
+
+  const rec = data as unknown as Record<string, unknown>;
+  const rawMatrix = rec.customerVariantStock ?? rec.CustomerVariantStock;
+  if (rawMatrix != null) {
+    const normalized = normalizeCustomerVariantStockFromApi(rawMatrix);
+    return { ...data, customerVariantStock: normalized };
+  }
+
+  return data;
 }
 
 /** Admin ürün düzenleme: ham JSON + tüm alanlar (Bearer). Public GET yayında olmayan ürünü vermez. */
@@ -202,6 +246,22 @@ export async function getProductLocalImages(productId: number): Promise<string[]
 export function getProductLocalImageUrl(productId: number, filename: string): string {
   const base = PUBLIC_ASSET_BASE_URL;
   return `${base}/product-images/${productId}/${encodeURIComponent(filename)}`;
+}
+
+/** ASP.NET model binder: <c>Product.CustomerColorImages[i].Color</c>, <c>.MediaId</c> */
+export function appendCustomerColorImagesFormFields(
+  formData: FormData,
+  rows: CustomerColorImageRow[] | undefined
+): void {
+  if (!rows?.length) return;
+  let i = 0;
+  for (const row of rows) {
+    const c = row.color?.trim();
+    if (!c || row.mediaId == null || row.mediaId <= 0) continue;
+    formData.append(`Product.CustomerColorImages[${i}].Color`, c);
+    formData.append(`Product.CustomerColorImages[${i}].MediaId`, String(row.mediaId));
+    i++;
+  }
 }
 
 // Create product
@@ -245,6 +305,7 @@ export async function createProduct(product: Partial<Product>): Promise<Product 
   if (typeof product.customerVariantStockJson === 'string' && product.customerVariantStockJson.length > 0) {
     formData.append('Product.CustomerVariantStockJson', product.customerVariantStockJson);
   }
+  appendCustomerColorImagesFormFields(formData, product.customerColorImages);
 
   // Add images
   if (product.thumbnailImage instanceof File) {
@@ -320,6 +381,7 @@ export async function updateProduct(id: number, product: Partial<Product>): Prom
       product.customerVariantStockJson || ''
     );
   }
+  appendCustomerColorImagesFormFields(formData, product.customerColorImages);
 
   if (product.thumbnailImage instanceof File) {
     formData.append('ThumbnailImage', product.thumbnailImage);

@@ -3,18 +3,29 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   getProductAdmin,
   updateProduct,
   createProduct,
+  deleteProduct,
   Product,
   parseCustomerOptions,
+  type CustomerColorImageRow,
 } from "../../../lib/api/products";
-import { pickStockCaseInsensitive, variantRowsFromProductMatrix } from "../../../lib/productVariantStock";
+import { variantRowsFromProductMatrix, sumVariantMatrixStock } from "../../../lib/productVariantStock";
 import { VariantStockEditor, type VariantColorRow } from "../VariantStockEditor";
 import { getBrands, Brand } from "../../../lib/api/brands";
 import { getCategories, Category } from "../../../lib/api/categories";
 import { importProductImages } from "../../../lib/api/legacyImport";
+import { getImageUrl, isApiHostedMediaSrc, shouldBypassNextImageOptimization } from "../../../lib/api/config";
+import "../product-form.tw.css";
+import { ProductFormLayout } from "../form/ProductFormLayout";
+import { AccordionSection } from "../form/AccordionSection";
+import { TwFloatingInput, TwFloatingTextarea } from "../form/FloatingFields";
+import { DescriptionModal } from "../form/DescriptionModal";
+import { ThumbnailDropZone, GalleryDropZone } from "../form/ImageUploadBlocks";
+import { PresetSizeToggles } from "../form/PresetSizeToggles";
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -22,6 +33,7 @@ export default function EditProductPage() {
   const rawId = params?.id as string | undefined;
   const id = rawId && rawId !== "create" && !isNaN(Number(rawId)) ? Number(rawId) : null;
   const isCreateMode = rawId === "create" || !rawId;
+
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -30,6 +42,16 @@ export default function EditProductPage() {
   const [productImages, setProductImages] = useState<File[]>([]);
   const [thumbnailImage, setThumbnailImage] = useState<File | null>(null);
   const [importingImages, setImportingImages] = useState(false);
+  const [descOpen, setDescOpen] = useState(false);
+  const [existingThumbUrl, setExistingThumbUrl] = useState<string | null>(null);
+  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>([]);
+
+  const [acc, setAcc] = useState({
+    images: true,
+    basic: true,
+    variants: false,
+    seo: false,
+  });
 
   const [formData, setFormData] = useState<Partial<Product>>({
     name: "",
@@ -57,6 +79,10 @@ export default function EditProductPage() {
   });
 
   const [variantRows, setVariantRows] = useState<VariantColorRow[]>([]);
+  /** Galeri ProductMedia id’leri — renk görseli seçimi için (kayıtlı ürün). */
+  const [galleryMediaOptions, setGalleryMediaOptions] = useState<{ id: number; preview: string }[]>([]);
+  /** Varyasyon renk adı → galeri görseli id */
+  const [colorImageAssignments, setColorImageAssignments] = useState<CustomerColorImageRow[]>([]);
 
   const sizeLabels = useMemo(() => {
     const raw = typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : "";
@@ -76,10 +102,7 @@ export default function EditProductPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (isCreateMode || !id) {
-        const [brandsData, categoriesData] = await Promise.all([
-          getBrands(),
-          getCategories(),
-        ]);
+        const [brandsData, categoriesData] = await Promise.all([getBrands(), getCategories()]);
         if (brandsData) setBrands(brandsData);
         if (categoriesData) setCategories(categoriesData);
         setFetching(false);
@@ -98,9 +121,7 @@ export default function EditProductPage() {
         if (catIds.length > 0 && categoriesData) {
           const firstCatId = catIds[0];
           const cat = categoriesData.find((c) => c.id === firstCatId);
-          if (cat) {
-            mainId = cat.parentId ?? firstCatId;
-          }
+          if (cat) mainId = cat.parentId ?? firstCatId;
         }
         setSelectedMainCategoryId((prev) => (mainId != null ? mainId : prev));
         setFormData({
@@ -133,6 +154,13 @@ export default function EditProductPage() {
                 ? product.customerSizeOptions.join(", ")
                 : String(product.customerSizeOptions),
         });
+        setExistingThumbUrl(product.thumbnailImageUrl ? getImageUrl(product.thumbnailImageUrl) : null);
+        const g =
+          product.productImages?.map((im) =>
+            getImageUrl(im.mediaUrl || im.originalUrl || im.imageUrl || "")
+          ) ?? [];
+        setExistingGalleryUrls(g.filter(Boolean));
+
         const sizeOptStr =
           product.customerSizeOptions == null
             ? ""
@@ -140,13 +168,47 @@ export default function EditProductPage() {
               ? product.customerSizeOptions.join(", ")
               : String(product.customerSizeOptions);
         const parsedSizes = parseCustomerOptions(sizeOptStr);
-        const sizeListForRows = parsedSizes.length > 0 ? parsedSizes : ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
-        setVariantRows(variantRowsFromProductMatrix(product, sizeListForRows));
+        const sizeListForRows =
+          parsedSizes.length > 0 ? parsedSizes : ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
+        const vr = variantRowsFromProductMatrix(product, sizeListForRows);
+        setVariantRows(vr);
+        const apiRows = product.customerColorImages ?? [];
+        const apiMap = new Map<string, number | null>();
+        for (const r of apiRows) {
+          const key = String(r.color ?? "").trim().toLowerCase();
+          if (!key) continue;
+          apiMap.set(key, r.mediaId != null && r.mediaId > 0 ? r.mediaId : null);
+        }
+        setColorImageAssignments(
+          vr
+            .map((r) => r.name.trim())
+            .filter(Boolean)
+            .map((name) => ({ color: name, mediaId: apiMap.get(name.toLowerCase()) ?? null }))
+        );
+        setGalleryMediaOptions(
+          (product.productImages ?? [])
+            .filter((im) => typeof im.id === "number" && im.id > 0)
+            .map((im) => ({
+              id: im.id!,
+              preview: getImageUrl(im.mediaUrl || im.originalUrl || im.imageUrl || ""),
+            }))
+        );
       }
       setFetching(false);
     };
     fetchData();
   }, [id, isCreateMode]);
+
+  const handleVariantRowsChange = (rows: VariantColorRow[]) => {
+    setVariantRows(rows);
+    setColorImageAssignments((prev) => {
+      const prevMap = new Map(prev.map((x) => [x.color.trim().toLowerCase(), x.mediaId]));
+      return rows
+        .map((r) => r.name.trim())
+        .filter(Boolean)
+        .map((name) => ({ color: name, mediaId: prevMap.get(name.toLowerCase()) ?? null }));
+    });
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -164,20 +226,30 @@ export default function EditProductPage() {
     } else if (name === "subCategoryId") {
       const subId = value ? parseInt(value) : null;
       setFormData((prev) => ({ ...prev, categoryIds: subId ? [subId] : [] }));
-    } else if (name === "price" || name === "oldPrice" || name === "specialPrice" || name === "stockQuantity") {
+    } else if (
+      name === "price" ||
+      name === "oldPrice" ||
+      name === "specialPrice"
+    ) {
       setFormData((prev) => ({ ...prev, [name]: parseFloat(value) || 0 }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) setThumbnailImage(e.target.files[0]);
-  };
+  const toggleAcc = (k: keyof typeof acc) => setAcc((p) => ({ ...p, [k]: !p[k] }));
 
-  const handleProductImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) setProductImages(Array.from(e.target.files));
-  };
+  const completeImages =
+    Boolean(thumbnailImage || productImages.length > 0) ||
+    Boolean(existingThumbUrl || existingGalleryUrls.length > 0);
+  const completeBasic =
+    Boolean((formData.name || "").trim()) && Number(formData.price) > 0;
+  const completeVariants =
+    variantRows.length === 0 || variantRows.every((r) => r.name.trim().length > 0);
+  const completeSeo =
+    Boolean((formData.metaTitle || "").trim()) ||
+    Boolean((formData.metaKeywords || "").trim()) ||
+    Boolean((formData.metaDescription || "").trim());
 
   const handleImportProductImages = async () => {
     if (!id || isCreateMode) return;
@@ -188,7 +260,18 @@ export default function EditProductPage() {
       alert("Görseller productImages klasöründen içe aktarıldı.");
       window.location.reload();
     } else {
-      alert(res.error || "Görsel içe aktarma başarısız. productImages klasörünün mevcut olduğundan emin olun.");
+      alert(res.error || "Görsel içe aktarma başarısız.");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || isCreateMode) return;
+    if (!confirm("Bu ürünü kalıcı olarak silmek istediğinize emin misiniz?")) return;
+    const ok = await deleteProduct(id);
+    if (ok) {
+      router.push("/admin/products");
+    } else {
+      alert("Ürün silinemedi.");
     }
   };
 
@@ -197,8 +280,13 @@ export default function EditProductPage() {
     setLoading(true);
     try {
       const namedVariants = variantRows.filter((r) => r.name.trim());
+      const stockQuantity =
+        namedVariants.length > 0
+          ? sumVariantMatrixStock(namedVariants, sizeLabels)
+          : formData.stockQuantity ?? 0;
       const payload: Partial<Product> = {
         ...formData,
+        stockQuantity,
         thumbnailImage: thumbnailImage ?? undefined,
         productImages: productImages.map((img) => ({ image: img })),
         customerColorOptions: "",
@@ -211,6 +299,7 @@ export default function EditProductPage() {
                 })),
               })
             : "",
+        customerColorImages: colorImageAssignments.filter((r) => r.color.trim()),
       };
       if (isCreateMode) {
         const result = await createProduct(payload);
@@ -239,450 +328,510 @@ export default function EditProductPage() {
 
   if (fetching && !isCreateMode) {
     return (
-      <div className="d-flex justify-content-center align-items-center py-5">
-        <div className="spinner-border" role="status">
-          <span className="visually-hidden">Yükleniyor...</span>
-        </div>
+      <div className="tw-flex tw-justify-center tw-py-16">
+        <div className="spinner-border text-secondary" role="status" />
       </div>
     );
   }
 
   if (!isCreateMode && !formData.name && !fetching) {
     return (
-      <div>
-        <p>Ürün bulunamadı.</p>
+      <div className="tw-rounded-2xl tw-border tw-border-stone-200 tw-bg-white tw-p-6 tw-shadow-sm">
+        <p className="tw-mb-4 tw-text-stone-600">Ürün bulunamadı.</p>
         <Link href="/admin/products" className="btn btn-secondary">
-          Listeye Dön
+          Listeye dön
         </Link>
       </div>
     );
   }
 
+  const title = isCreateMode ? "Yeni Ürün" : "Ürünü Düzenle";
+  const imgUnopt = (src: string) =>
+    isApiHostedMediaSrc(src) || shouldBypassNextImageOptimization(src);
+
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>{isCreateMode ? "Yeni Ürün Ekle" : "Ürünü Düzenle"}</h1>
-        <Link href="/admin/products" className="btn btn-secondary">
-          Geri Dön
-        </Link>
-      </div>
-
-      <form onSubmit={handleSubmit}>
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">Temel Bilgiler</h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <label className="form-label">
-                  Ürün Adı <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Slug</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="slug"
-                  value={formData.slug}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Stok Kodu (SKU)</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="sku"
-                  value={formData.sku}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Barkod (GTIN)</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="gtin"
-                  value={formData.gtin}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-12 mb-3">
-                <label className="form-label">Ön Yazı (ONYAZI)</label>
-                <textarea
-                  className="form-control"
-                  name="shortDescription"
-                  rows={3}
-                  value={formData.shortDescription}
-                  onChange={handleInputChange}
-                  placeholder="HTML veya düz metin. Sitede format otomatik algılanır."
-                />
-              </div>
-              <div className="col-12 mb-3">
-                <label className="form-label">Açıklama (ACIKLAMA)</label>
-                <textarea
-                  className="form-control"
-                  name="description"
-                  rows={5}
-                  value={formData.description}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-12 mb-3">
-                <label className="form-label">Özellikler</label>
-                <textarea
-                  className="form-control"
-                  name="specification"
-                  rows={5}
-                  value={formData.specification}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">Fiyat ve Stok</h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              <div className="col-md-4 mb-3">
-                <label className="form-label">
-                  Satış Fiyatı <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="form-control"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="col-md-4 mb-3">
-                <label className="form-label">Piyasa Fiyatı</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="form-control"
-                  name="oldPrice"
-                  value={formData.oldPrice}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-md-4 mb-3">
-                <label className="form-label">İndirimli Fiyat</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="form-control"
-                  name="specialPrice"
-                  value={formData.specialPrice}
-                  onChange={handleInputChange}
-                />
-                <small className="text-muted">0 = indirim yok. Satış fiyatından düşük olmalı.</small>
-              </div>
-              <div className="col-md-4 mb-3">
-                <label className="form-label">İndirim Başlangıcı</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  name="specialPriceStart"
-                  value={formData.specialPriceStart || ""}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-md-4 mb-3">
-                <label className="form-label">İndirim Bitişi</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  name="specialPriceEnd"
-                  value={formData.specialPriceEnd || ""}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-12 col-md-6 mb-3">
-                <label className="form-label">Stok Adedi</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  name="stockQuantity"
-                  value={formData.stockQuantity}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-12 mb-3">
-                <div className="d-flex align-items-center gap-2 flex-wrap">
-                  <input
-                    className="form-check-input flex-shrink-0 m-0"
-                    type="checkbox"
-                    name="isCallForPricing"
-                    id="editIsCallForPricing"
-                    checked={formData.isCallForPricing}
-                    onChange={handleInputChange}
-                  />
-                  <label className="form-check-label mb-0" htmlFor="editIsCallForPricing" style={{ cursor: "pointer" }}>
-                    Fiyat için Arayın
-                  </label>
+    <>
+      <ProductFormLayout
+        title={title}
+        backHref="/admin/products"
+        submitLabel="Ürünü Kaydet"
+        loading={loading}
+        onSubmit={handleSubmit}
+      >
+        <AccordionSection
+          title="Görseller"
+          open={acc.images}
+          onToggle={() => toggleAcc("images")}
+          complete={completeImages}
+        >
+          <div className="tw-space-y-8">
+            {!isCreateMode && (existingThumbUrl || existingGalleryUrls.length > 0) ? (
+              <div>
+                <p className="tw-mb-2 tw-text-sm tw-font-medium tw-text-stone-600">Mevcut görseller</p>
+                <div className="tw-flex tw-gap-3 tw-overflow-x-auto tw-pb-2">
+                  {existingThumbUrl ? (
+                    <div className="tw-relative tw-h-24 tw-w-24 tw-flex-shrink-0 tw-overflow-hidden tw-rounded-2xl tw-border tw-border-stone-200">
+                      <Image
+                        src={existingThumbUrl}
+                        alt="Kapak"
+                        fill
+                        className="tw-object-cover"
+                        unoptimized={imgUnopt(existingThumbUrl)}
+                      />
+                    </div>
+                  ) : null}
+                  {existingGalleryUrls.map((u, i) => (
+                    <div
+                      key={`${u}-${i}`}
+                      className="tw-relative tw-h-24 tw-w-24 tw-flex-shrink-0 tw-overflow-hidden tw-rounded-2xl tw-border tw-border-stone-200"
+                    >
+                      <Image
+                        src={u}
+                        alt=""
+                        fill
+                        className="tw-object-cover"
+                        unoptimized={imgUnopt(u)}
+                      />
+                    </div>
+                  ))}
                 </div>
+                <p className="tw-mt-2 tw-text-xs tw-text-stone-500">
+                  Yeni dosya yüklerseniz sunucu mevcut görselleri güncellemek üzere kaydeder.
+                </p>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">Kategori ve Marka</h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Marka</label>
-                <select
-                  className="form-select"
-                  name="brandId"
-                  value={formData.brandId ?? ""}
-                  onChange={handleInputChange}
+            ) : null}
+            <ThumbnailDropZone
+              label={isCreateMode ? "Kapak (thumbnail)" : "Yeni kapak görseli (isteğe bağlı)"}
+              file={thumbnailImage}
+              onPick={setThumbnailImage}
+              onClear={() => setThumbnailImage(null)}
+            />
+            <GalleryDropZone
+              files={productImages}
+              onAdd={(files) => setProductImages((prev) => [...prev, ...files])}
+              onRemoveAt={(i) => setProductImages((prev) => prev.filter((_, j) => j !== i))}
+            />
+            {!isCreateMode && id ? (
+              <div>
+                <button
+                  type="button"
+                  onClick={handleImportProductImages}
+                  disabled={importingImages}
+                  className="tw-inline-flex tw-min-h-[44px] tw-items-center tw-rounded-xl tw-border tw-border-stone-300 tw-bg-white tw-px-4 tw-text-sm tw-font-medium tw-text-stone-700 tw-transition hover:tw-bg-stone-50 disabled:tw-opacity-50"
                 >
-                  <option value="">Marka Seçin</option>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
+                  {importingImages ? "İçe aktarılıyor…" : "productImages klasöründen içe aktar"}
+                </button>
+                <p className="tw-mt-1 tw-text-xs tw-text-stone-500">
+                  productImages/{id}/ içindeki dosyaları ürüne ekler.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </AccordionSection>
+
+        <AccordionSection
+          title="Temel Bilgiler"
+          open={acc.basic}
+          onToggle={() => toggleAcc("basic")}
+          complete={completeBasic}
+        >
+          <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2">
+            <TwFloatingInput
+              id="ed-name"
+              name="name"
+              label="Ürün adı *"
+              value={formData.name ?? ""}
+              onChange={handleInputChange}
+              required
+            />
+            <TwFloatingInput
+              id="ed-slug"
+              name="slug"
+              label="Slug"
+              value={formData.slug ?? ""}
+              onChange={handleInputChange}
+            />
+            <TwFloatingInput
+              id="ed-sku"
+              name="sku"
+              label="SKU"
+              value={formData.sku ?? ""}
+              onChange={handleInputChange}
+            />
+            <TwFloatingInput
+              id="ed-gtin"
+              name="gtin"
+              label="GTIN / Barkod"
+              value={formData.gtin ?? ""}
+              onChange={handleInputChange}
+            />
+            <div className="md:tw-col-span-2">
+              <TwFloatingTextarea
+                id="ed-short"
+                name="shortDescription"
+                label="Ön yazı (ONYAZI)"
+                rows={3}
+                value={formData.shortDescription ?? ""}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="md:tw-col-span-2">
+              <button
+                type="button"
+                onClick={() => setDescOpen(true)}
+                className="tw-flex tw-min-h-[48px] tw-w-full tw-items-center tw-justify-between tw-rounded-2xl tw-border tw-border-stone-200 tw-bg-white tw-px-4 tw-text-left tw-text-sm tw-font-medium tw-text-stone-700 tw-shadow-sm tw-transition hover:tw-border-lavinia-sage"
+              >
+                <span>
+                  Açıklama (ACIKLAMA)
+                  {(formData.description || "").trim() ? (
+                    <span className="tw-ml-2 tw-text-xs tw-font-normal tw-text-lavinia-sage">
+                      · Düzenlendi
+                    </span>
+                  ) : (
+                    <span className="tw-ml-2 tw-text-xs tw-font-normal tw-text-stone-400">
+                      · Tam ekran yaz
+                    </span>
+                  )}
+                </span>
+                <span aria-hidden>→</span>
+              </button>
+            </div>
+            <div className="md:tw-col-span-2">
+              <TwFloatingTextarea
+                id="ed-spec"
+                name="specification"
+                label="Özellikler"
+                rows={4}
+                value={formData.specification ?? ""}
+                onChange={handleInputChange}
+              />
+            </div>
+            <TwFloatingInput
+              id="ed-price"
+              name="price"
+              label="Satış fiyatı *"
+              type="text"
+              inputMode="decimal"
+              value={formData.price === 0 ? "" : String(formData.price)}
+              onChange={(e) => {
+                const v = e.target.value.replace(",", ".");
+                setFormData((p) => ({ ...p, price: parseFloat(v) || 0 }));
+              }}
+              required
+            />
+            <TwFloatingInput
+              id="ed-old"
+              name="oldPrice"
+              label="Piyasa fiyatı"
+              type="text"
+              inputMode="decimal"
+              value={formData.oldPrice === 0 ? "" : String(formData.oldPrice)}
+              onChange={(e) => {
+                const v = e.target.value.replace(",", ".");
+                setFormData((p) => ({ ...p, oldPrice: parseFloat(v) || 0 }));
+              }}
+            />
+            <TwFloatingInput
+              id="ed-sp"
+              name="specialPrice"
+              label="İndirimli fiyat"
+              type="text"
+              inputMode="decimal"
+              value={formData.specialPrice === 0 ? "" : String(formData.specialPrice)}
+              onChange={(e) => {
+                const v = e.target.value.replace(",", ".");
+                setFormData((p) => ({ ...p, specialPrice: parseFloat(v) || 0 }));
+              }}
+            />
+            <div>
+              <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium tw-text-stone-600">
+                İndirim başlangıcı
+              </label>
+              <input
+                type="date"
+                name="specialPriceStart"
+                className="tw-block tw-w-full tw-min-h-[48px] tw-rounded-2xl tw-border tw-border-stone-200 tw-bg-white tw-px-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-lavinia-sage/25"
+                value={formData.specialPriceStart || ""}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div>
+              <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium tw-text-stone-600">
+                İndirim bitişi
+              </label>
+              <input
+                type="date"
+                name="specialPriceEnd"
+                className="tw-block tw-w-full tw-min-h-[48px] tw-rounded-2xl tw-border tw-border-stone-200 tw-bg-white tw-px-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-lavinia-sage/25"
+                value={formData.specialPriceEnd || ""}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="tw-flex tw-min-h-[48px] tw-items-center tw-gap-3 md:tw-col-span-2">
+              <input
+                className="tw-h-5 tw-w-5 tw-shrink-0 tw-rounded tw-border-stone-300"
+                type="checkbox"
+                name="isCallForPricing"
+                id="editIsCallForPricing"
+                checked={formData.isCallForPricing}
+                onChange={handleInputChange}
+              />
+              <label className="tw-mb-0 tw-cursor-pointer tw-text-sm" htmlFor="editIsCallForPricing">
+                Fiyat için arayın
+              </label>
+            </div>
+            <div>
+              <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium tw-text-stone-600">Marka</label>
+              <select
+                className="tw-block tw-w-full tw-min-h-[48px] tw-rounded-2xl tw-border tw-border-stone-200 tw-bg-white tw-px-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-lavinia-sage/25"
+                name="brandId"
+                value={formData.brandId ?? ""}
+                onChange={handleInputChange}
+              >
+                <option value="">Marka seçin</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium tw-text-stone-600">Ana kategori</label>
+              <select
+                className="tw-block tw-w-full tw-min-h-[48px] tw-rounded-2xl tw-border tw-border-stone-200 tw-bg-white tw-px-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-lavinia-sage/25"
+                name="mainCategoryId"
+                value={selectedMainCategoryId ?? ""}
+                onChange={handleInputChange}
+              >
+                <option value="">Seçin</option>
+                {categories
+                  .filter((c) => !c.parentId)
+                  .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
-                </select>
-              </div>
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Ana Kategori</label>
-                <select
-                  className="form-select"
-                  name="mainCategoryId"
-                  value={selectedMainCategoryId ?? ""}
-                  onChange={handleInputChange}
-                >
-                  <option value="">Kategori seçin</option>
-                  {categories
-                    .filter((c) => !c.parentId)
-                    .sort((a, b) => {
-                      const orderA = a.displayOrder !== undefined ? a.displayOrder : 0;
-                      const orderB = b.displayOrder !== undefined ? b.displayOrder : 0;
-                      return orderA - orderB;
-                    })
-                    .map((c) => (
+              </select>
+            </div>
+            <div>
+              <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium tw-text-stone-600">Alt kategori</label>
+              <select
+                className="tw-block tw-w-full tw-min-h-[48px] tw-rounded-2xl tw-border tw-border-stone-200 tw-bg-white tw-px-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-lavinia-sage/25"
+                name="subCategoryId"
+                value={formData.categoryIds?.[0] ?? ""}
+                onChange={handleInputChange}
+              >
+                <option value="">
+                  {selectedMainCategoryId ? "Alt kategori (isteğe bağlı)" : "Önce ana kategori"}
+                </option>
+                {selectedMainCategoryId &&
+                  (() => {
+                    const subs = categories
+                      .filter((c) => c.parentId === selectedMainCategoryId)
+                      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+                    const mainCat = categories.find((c) => c.id === selectedMainCategoryId);
+                    if (subs.length === 0 && mainCat) {
+                      return (
+                        <option value={selectedMainCategoryId}>{mainCat.name} (ana)</option>
+                      );
+                    }
+                    return subs.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
-                    ))}
-                </select>
-              </div>
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Alt Kategori</label>
-                <select
-                  className="form-select"
-                  name="subCategoryId"
-                  value={formData.categoryIds?.[0] ?? ""}
-                  onChange={handleInputChange}
-                >
-                  <option value="">{selectedMainCategoryId ? "Alt kategori seçin (isteğe bağlı)" : "Önce ana kategori seçin"}</option>
-                  {selectedMainCategoryId && (() => {
-                    const subs = categories
-                      .filter((c) => c.parentId === selectedMainCategoryId)
-                      .sort((a, b) => {
-                        const orderA = a.displayOrder !== undefined ? a.displayOrder : 0;
-                        const orderB = b.displayOrder !== undefined ? b.displayOrder : 0;
-                        return orderA - orderB;
-                      });
-                    const mainCat = categories.find((c) => c.id === selectedMainCategoryId);
-                    if (subs.length === 0 && mainCat) {
-                      return <option value={selectedMainCategoryId}>{mainCat.name} (ana kategori)</option>;
-                    }
-                    return subs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>);
+                    ));
                   })()}
-                </select>
-                {selectedMainCategoryId && categories.filter((c) => c.parentId === selectedMainCategoryId).length === 0 && (
-                  <small className="form-text text-muted">Bu ana kategoride alt kategori yok; ürün ana kategoriye atanır.</small>
-                )}
-              </div>
+              </select>
             </div>
           </div>
-        </div>
+        </AccordionSection>
 
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">Renk × beden stoku</h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              <div className="col-12 mb-3">
-                <label className="form-label" htmlFor="edit-customer-size-options">
-                  Beden sütunları (isteğe bağlı)
-                </label>
-                <input
-                  id="edit-customer-size-options"
-                  type="text"
-                  className="form-control"
-                  name="customerSizeOptions"
-                  value={typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : ""}
-                  onChange={handleInputChange}
-                  placeholder="Boş = Standart, XS, S, M, L, XL, XXL — özel: 36, 38, 40 veya S, M, L"
-                  autoComplete="off"
-                />
-                <small className="form-text text-muted">
-                  Virgülle ayırın. Matris tablosundaki sütun başlıkları buradan gelir.
-                </small>
-              </div>
-              <VariantStockEditor sizeLabels={sizeLabels} rows={variantRows} onChange={setVariantRows} />
+        <AccordionSection
+          title="Varyasyon & Stok"
+          open={acc.variants}
+          onToggle={() => toggleAcc("variants")}
+          complete={completeVariants}
+        >
+          <div className="tw-grid tw-w-full tw-min-w-0 tw-max-w-full tw-grid-cols-1 tw-gap-4">
+            <PresetSizeToggles
+              value={typeof formData.customerSizeOptions === "string" ? formData.customerSizeOptions : ""}
+              onChange={(v) => setFormData((p) => ({ ...p, customerSizeOptions: v }))}
+            />
+            <VariantStockEditor sizeLabels={sizeLabels} rows={variantRows} onChange={handleVariantRowsChange} />
+            <div className="tw-w-full tw-min-w-0 tw-rounded-md tw-border tw-border-stone-200 tw-bg-white tw-p-3 sm:tw-p-4">
+              <p className="tw-mb-1 tw-text-sm tw-font-semibold tw-text-stone-900">Renk görselleri (mağaza)</p>
+              <p className="tw-mb-3 tw-text-xs tw-leading-relaxed tw-text-stone-600">
+                Her varyasyon rengine ürün galerisindeki bir görseli bağlayın; müşteri o rengi seçince vitrin büyük
+                görseli bu URL ile güncellenebilir.
+              </p>
+              {isCreateMode ? (
+                <p className="tw-text-xs tw-text-amber-800">
+                  Yeni üründe galeri kaydı oluşmadan önce görsel id’leri yoktur — önce ürünü kaydedip tekrar
+                  düzenleyerek atama yapın.
+                </p>
+              ) : galleryMediaOptions.length === 0 ? (
+                <p className="tw-text-xs tw-text-stone-500">
+                  Galeri görseli yok. Görseller bölümünden dosya yükleyin veya klasörden içe aktarın.
+                </p>
+              ) : colorImageAssignments.length === 0 ? (
+                <p className="tw-text-xs tw-text-stone-500">Önce yukarıdan en az bir renk ekleyin.</p>
+              ) : (
+                <div className="tw-w-full tw-min-w-0 tw-space-y-4">
+                  {colorImageAssignments.map((row) => {
+                    const key = row.color.trim().toLowerCase();
+                    const setMediaForRow = (mediaId: number | null) => {
+                      setColorImageAssignments((prev) =>
+                        prev.map((x) =>
+                          x.color.trim().toLowerCase() === key ? { ...x, mediaId } : x
+                        )
+                      );
+                    };
+                    return (
+                      <div
+                        key={row.color}
+                        className="tw-w-full tw-min-w-0 tw-rounded-xl tw-border tw-border-stone-200 tw-bg-white tw-p-3 sm:tw-p-4"
+                      >
+                        <p className="tw-mb-3 tw-text-sm tw-font-semibold tw-text-stone-900">{row.color}</p>
+                        <div
+                          className="tw-grid tw-w-full tw-min-w-0 tw-gap-2 sm:tw-gap-3"
+                          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(4.25rem, 1fr))" }}
+                          role="group"
+                          aria-label={`${row.color} için galeri görseli`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setMediaForRow(null)}
+                            title="Görsel bağlama"
+                            aria-pressed={row.mediaId == null}
+                            className={`tw-flex tw-aspect-square tw-w-full tw-min-h-0 tw-items-center tw-justify-center tw-rounded-lg tw-border-2 tw-px-1 tw-text-xs tw-font-medium tw-transition sm:tw-px-2 sm:tw-text-sm ${
+                              row.mediaId == null
+                                ? "tw-border-stone-900 tw-bg-stone-900 tw-text-white"
+                                : "tw-border-stone-200 tw-bg-stone-50 tw-text-stone-700 hover:tw-border-stone-300 hover:tw-bg-white"
+                            }`}
+                          >
+                            Yok
+                          </button>
+                          {galleryMediaOptions.map((g) => {
+                            const selected = row.mediaId === g.id;
+                            return (
+                              <button
+                                type="button"
+                                key={g.id}
+                                onClick={() => setMediaForRow(g.id)}
+                                title={`Galeri #${g.id}`}
+                                aria-pressed={selected}
+                                className={`tw-relative tw-aspect-square tw-w-full tw-min-h-0 tw-overflow-hidden tw-rounded-lg tw-transition ${
+                                  selected
+                                    ? "tw-z-[1] tw-border-2 tw-border-yellow-400 tw-ring-2 tw-ring-yellow-400 tw-ring-offset-2"
+                                    : "tw-border-2 tw-border-transparent tw-ring-1 tw-ring-stone-200 hover:tw-ring-stone-400"
+                                }`}
+                              >
+                                <Image
+                                  src={g.preview}
+                                  alt=""
+                                  fill
+                                  className="tw-object-cover"
+                                  sizes="(max-width: 640px) 22vw, 100px"
+                                  unoptimized={imgUnopt(g.preview)}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        </AccordionSection>
 
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">Görseller</h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Thumbnail (yeni yükleme)</label>
+        <AccordionSection
+          title="SEO / Diğer"
+          open={acc.seo}
+          onToggle={() => toggleAcc("seo")}
+          complete={completeSeo}
+        >
+          <div className="tw-grid tw-grid-cols-1 tw-gap-4">
+            <TwFloatingInput
+              id="ed-mt"
+              name="metaTitle"
+              label="Meta başlık"
+              value={formData.metaTitle ?? ""}
+              onChange={handleInputChange}
+            />
+            <TwFloatingInput
+              id="ed-mk"
+              name="metaKeywords"
+              label="Meta anahtar kelimeler"
+              value={formData.metaKeywords ?? ""}
+              onChange={handleInputChange}
+            />
+            <TwFloatingTextarea
+              id="ed-md"
+              name="metaDescription"
+              label="Meta açıklama"
+              rows={3}
+              value={formData.metaDescription ?? ""}
+              onChange={handleInputChange}
+            />
+            <div className="tw-flex tw-min-h-[48px] tw-flex-col tw-gap-4 tw-rounded-2xl tw-border tw-border-stone-100 tw-bg-stone-50/60 tw-p-4">
+              <div className="tw-flex tw-items-center tw-gap-3">
                 <input
-                  type="file"
-                  className="form-control"
-                  accept="image/*"
-                  onChange={handleThumbnailChange}
-                />
-                {thumbnailImage && (
-                  <small className="text-muted d-block mt-2">Seçilen: {thumbnailImage.name}</small>
-                )}
-              </div>
-              <div className="col-md-6 mb-3">
-                <label className="form-label">Ek ürün görselleri</label>
-                <input
-                  type="file"
-                  className="form-control"
-                  accept="image/*"
-                  multiple
-                  onChange={handleProductImagesChange}
-                />
-                {productImages.length > 0 && (
-                  <small className="text-muted d-block mt-2">{productImages.length} görsel seçildi</small>
-                )}
-              </div>
-              <div className="col-12 mt-2">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={handleImportProductImages}
-                  disabled={importingImages || isCreateMode}
-                >
-                  {importingImages ? "İçe aktarılıyor..." : "productImages klasöründen içe aktar"}
-                </button>
-                <small className="text-muted d-block mt-1">
-                  productImages/{id}/ içindeki görselleri ürüne ekler. İlk görsel thumbnail olur.
-                </small>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">SEO</h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              <div className="col-12 mb-3">
-                <label className="form-label">Meta Başlık</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="metaTitle"
-                  value={formData.metaTitle}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-12 mb-3">
-                <label className="form-label">Meta Anahtar Kelimeler</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="metaKeywords"
-                  value={formData.metaKeywords}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="col-12 mb-3">
-                <label className="form-label">Meta Açıklama</label>
-                <textarea
-                  className="form-control"
-                  name="metaDescription"
-                  rows={3}
-                  value={formData.metaDescription}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">Yayın</h5>
-          </div>
-          <div className="card-body">
-            <div className="d-flex flex-column gap-3">
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                <input
-                  className="form-check-input flex-shrink-0 m-0"
+                  className="tw-h-5 tw-w-5 tw-shrink-0 tw-rounded tw-border-stone-300"
                   type="checkbox"
                   name="isPublished"
                   id="editIsPublished"
                   checked={formData.isPublished}
                   onChange={handleInputChange}
                 />
-                <label className="form-check-label mb-0" htmlFor="editIsPublished" style={{ cursor: "pointer" }}>
-                  Ürün Aktif (Yayınla)
+                <label className="tw-mb-0 tw-cursor-pointer tw-text-sm" htmlFor="editIsPublished">
+                  Ürün yayında
                 </label>
               </div>
-              <div className="d-flex align-items-center gap-2 flex-wrap">
+              <div className="tw-flex tw-items-center tw-gap-3">
                 <input
-                  className="form-check-input flex-shrink-0 m-0"
+                  className="tw-h-5 tw-w-5 tw-shrink-0 tw-rounded tw-border-stone-300"
                   type="checkbox"
                   name="isFeatured"
                   id="editIsFeatured"
                   checked={formData.isFeatured}
                   onChange={handleInputChange}
                 />
-                <label className="form-check-label mb-0" htmlFor="editIsFeatured" style={{ cursor: "pointer" }}>
-                  Vitrin (Öne Çıkar)
+                <label className="tw-mb-0 tw-cursor-pointer tw-text-sm" htmlFor="editIsFeatured">
+                  Vitrinde göster
                 </label>
               </div>
             </div>
           </div>
-        </div>
+        </AccordionSection>
 
-        <div className="d-flex gap-2">
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? "Kaydediliyor..." : "Güncelle"}
-          </button>
-          <Link href="/admin/products" className="btn btn-secondary">
-            İptal
-          </Link>
-        </div>
-      </form>
-    </div>
+        {!isCreateMode && id ? (
+          <div className="tw-mb-4 tw-rounded-md tw-border tw-border-red-200 tw-bg-red-50/50 tw-p-4">
+            <p className="tw-mb-1 tw-text-sm tw-font-semibold tw-text-red-950">Tehlikeli alan</p>
+            <p className="tw-mb-3 tw-text-xs tw-leading-relaxed tw-text-red-900/85">
+              Ürünü silmek bu kaydı ve bağlantılarını kaldırır. Bu işlem geri alınamaz.
+            </p>
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="tw-inline-flex tw-min-h-[44px] tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-red-400 tw-bg-white tw-px-4 tw-text-sm tw-font-semibold tw-text-red-800 tw-shadow-sm tw-transition hover:tw-bg-red-50"
+            >
+              Ürünü sil
+            </button>
+          </div>
+        ) : null}
+      </ProductFormLayout>
+
+      <DescriptionModal
+        open={descOpen}
+        value={formData.description ?? ""}
+        onChange={(v) => setFormData((p) => ({ ...p, description: v }))}
+        onClose={() => setDescOpen(false)}
+      />
+    </>
   );
 }

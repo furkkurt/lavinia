@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
 import { 
   FaTshirt, 
   FaShoppingBag,
@@ -51,6 +51,7 @@ const OFFCANVAS_NAV_ID = "offcanvasNavbar";
 
 export default function Navbar() {
   const router = useRouter();
+  const navBarRef = useRef<HTMLElement | null>(null);
   const closeMobileNav = () => hideOffcanvasById(OFFCANVAS_NAV_ID);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -114,6 +115,25 @@ export default function Navbar() {
     };
     window.addEventListener('cart-updated', handleCartUpdate);
     return () => window.removeEventListener('cart-updated', handleCartUpdate);
+  }, []);
+
+  useLayoutEffect(() => {
+    const nav = navBarRef.current;
+    if (!nav || typeof document === "undefined") return;
+    const setMegaTop = () => {
+      const bottom = nav.getBoundingClientRect().bottom;
+      document.documentElement.style.setProperty("--lavinia-mega-top", `${Math.ceil(bottom)}px`);
+    };
+    setMegaTop();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(setMegaTop) : null;
+    ro?.observe(nav);
+    window.addEventListener("resize", setMegaTop);
+    window.addEventListener("scroll", setMegaTop, true);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", setMegaTop);
+      window.removeEventListener("scroll", setMegaTop, true);
+    };
   }, []);
 
   const checkAuthStatus = async () => {
@@ -254,7 +274,10 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="navbar navbar-expand-xl bg-light text-uppercase fs-6 p-3 border-bottom align-items-center">
+      <nav
+        ref={navBarRef}
+        className="navbar navbar-expand-xl bg-light text-uppercase fs-6 p-3 border-bottom align-items-center"
+      >
         <div className="container-fluid">
           <div className="d-flex justify-content-between align-items-center w-100 flex-wrap">
             <div className="d-flex align-items-center">

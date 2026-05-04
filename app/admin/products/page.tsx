@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getProductsGrid, deleteProduct, changeProductStatus, Product } from "../../lib/api/products";
 import Link from "next/link";
 import Image from "next/image";
-import { getImageUrl, isApiHostedMediaSrc } from "../../lib/api/config";
+import { getImageUrl, isApiHostedMediaSrc, shouldBypassNextImageOptimization } from "../../lib/api/config";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -102,9 +102,15 @@ export default function AdminProductsPage() {
                           alt=""
                           width={72}
                           height={72}
+                          sizes="72px"
                           style={{ objectFit: "cover" }}
                           className="rounded"
-                          unoptimized={isApiHostedMediaSrc(getImageUrl(product.thumbnailImageUrl))}
+                          unoptimized={
+                            isApiHostedMediaSrc(getImageUrl(product.thumbnailImageUrl)) ||
+                            shouldBypassNextImageOptimization(
+                              getImageUrl(product.thumbnailImageUrl)
+                            )
+                          }
                         />
                       ) : (
                         <div className="bg-secondary rounded" style={{ width: 72, height: 72 }} />
@@ -177,9 +183,15 @@ export default function AdminProductsPage() {
                             alt={product.name}
                             width={50}
                             height={50}
+                            sizes="50px"
                             style={{ objectFit: "cover" }}
                             className="rounded"
-                            unoptimized={isApiHostedMediaSrc(getImageUrl(product.thumbnailImageUrl))}
+                            unoptimized={
+                              isApiHostedMediaSrc(getImageUrl(product.thumbnailImageUrl)) ||
+                              shouldBypassNextImageOptimization(
+                                getImageUrl(product.thumbnailImageUrl)
+                              )
+                            }
                           />
                         ) : (
                           <div

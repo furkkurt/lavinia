@@ -8,6 +8,8 @@ export interface CheckoutSummary {
     productImage: string;
     productPrice: number;
     productPriceString: string;
+    compareAtPrice?: number | null;
+    compareAtPriceString?: string | null;
     quantity: number;
     total: number;
     totalString: string;
@@ -76,6 +78,33 @@ export async function completeCheckout(
     return { success: false, error: response.error };
   }
 
+  return { success: true, data: response.data! };
+}
+
+/**
+ * Geliştirme: stok azaltılmaz, PayTR yok. API’de `Checkout:TestCheckoutEnabled` gerekir.
+ */
+export async function completeTestCheckout(
+  checkoutId: string,
+  shippingAddressId: number,
+  orderNote: string | undefined,
+  guestShippingAddress: GuestShippingAddress | undefined
+): Promise<{ success: boolean; data?: CheckoutResult; error?: string }> {
+  const body: {
+    shippingAddressId: number;
+    orderNote?: string;
+    guestShippingAddress?: GuestShippingAddress;
+  } = { shippingAddressId, orderNote };
+  if (guestShippingAddress) {
+    body.guestShippingAddress = guestShippingAddress;
+  }
+  const response = await apiFetch<CheckoutResult & { testCheckout?: boolean }>(
+    `/api/checkout/${checkoutId}/complete-test`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+  if (response.error) {
+    return { success: false, error: response.error };
+  }
   return { success: true, data: response.data! };
 }
 

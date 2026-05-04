@@ -74,6 +74,15 @@ export function isApiHostedMediaSrc(src: string | undefined | null): boolean {
   return src.includes("/user-content/") || src.includes("/product-images/");
 }
 
+/**
+ * next/image `unoptimized`: yalnızca medya loopback’teyken (optimizer API’ye ulaşamaz).
+ * Canlıda aynı origin `/user-content/` vb. için optimizer küçük boyut üretebilir.
+ */
+export function shouldBypassNextImageOptimization(src: string | undefined | null): boolean {
+  if (!src) return false;
+  return src.includes("127.0.0.1") || src.includes("localhost");
+}
+
 export interface ApiResponse<T> {
   data?: T;
   error?: string;

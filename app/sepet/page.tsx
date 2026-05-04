@@ -105,7 +105,8 @@ export default function CartPage() {
         ) : (
           <div className="row">
             <div className="col-lg-8">
-              <div className="table-responsive">
+              {/* Masaüstü: geniş tablo; ürün hücresi + sütunlar */}
+              <div className="d-none d-lg-block table-responsive">
                 <table className="table align-middle">
                   <thead>
                     <tr style={{ borderBottom: "2px solid #000" }}>
@@ -120,24 +121,129 @@ export default function CartPage() {
                     {cart!.items.map((item) => {
                       const lineImg = getImageUrl(item.productImage);
                       return (
-                      <tr key={item.id} style={{ opacity: updating === item.id ? 0.5 : 1 }}>
-                        <td>
-                          <div className="d-flex align-items-center gap-3">
-                            <Link href={`/urunler/${item.productId}`}>
-                              <Image
-                                src={lineImg}
-                                alt={item.productName}
-                                width={80}
-                                height={100}
-                                style={{ objectFit: "cover" }}
-                                unoptimized={isApiHostedMediaSrc(lineImg)}
-                                onError={(e) => { (e.target as HTMLImageElement).src = '/images/product-item-1.jpg'; }}
-                              />
-                            </Link>
-                            <div>
+                        <tr key={item.id} style={{ opacity: updating === item.id ? 0.5 : 1 }}>
+                          <td>
+                            <div className="d-flex align-items-center gap-3">
+                              <Link href={`/urunler/${item.productId}`}>
+                                <Image
+                                  src={lineImg}
+                                  alt={item.productName}
+                                  width={80}
+                                  height={100}
+                                  style={{ objectFit: "cover" }}
+                                  unoptimized={isApiHostedMediaSrc(lineImg)}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = "/images/product-item-1.jpg";
+                                  }}
+                                />
+                              </Link>
+                              <div>
+                                <Link
+                                  href={`/urunler/${item.productId}`}
+                                  style={{ color: "#000", textDecoration: "none", fontWeight: 500 }}
+                                >
+                                  {item.productName}
+                                </Link>
+                                {(item.selectedSize || item.selectedColor) && (
+                                  <div className="small text-muted mt-1">
+                                    {item.selectedSize ? <>Beden: {item.selectedSize}</> : null}
+                                    {item.selectedSize && item.selectedColor ? " · " : null}
+                                    {item.selectedColor ? <>Renk: {item.selectedColor}</> : null}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            {item.compareAtPrice != null && item.compareAtPrice > item.productPrice ? (
+                              <span>
+                                <del
+                                  className="text-muted small d-block"
+                                  style={{ fontSize: "0.85em" }}
+                                >
+                                  {item.compareAtPriceString}
+                                </del>
+                                <span className="text-danger fw-semibold">{item.productPriceString}</span>
+                              </span>
+                            ) : (
+                              item.productPriceString
+                            )}
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-dark"
+                                style={{ width: "32px", height: "32px", padding: 0, borderRadius: 0 }}
+                                onClick={() => handleQuantityChange(item.id, item.productId, item.quantity - 1)}
+                                disabled={updating === item.id || item.quantity <= 1}
+                              >
+                                −
+                              </button>
+                              <span style={{ minWidth: "30px", textAlign: "center" }}>{item.quantity}</span>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-dark"
+                                style={{ width: "32px", height: "32px", padding: 0, borderRadius: 0 }}
+                                onClick={() => handleQuantityChange(item.id, item.productId, item.quantity + 1)}
+                                disabled={updating === item.id}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{item.totalString}</td>
+                          <td className="text-end" style={{ whiteSpace: "nowrap" }}>
+                            <button
+                              type="button"
+                              className="btn btn-sm border-0"
+                              title="Kaldır"
+                              aria-label="Sepetten kaldır"
+                              onClick={() => handleRemove(item.id)}
+                              disabled={updating === item.id}
+                              style={{ color: "#999", minWidth: "40px", minHeight: "40px" }}
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobil: kart; kaldır her zaman sağda görünür */}
+              <div className="d-lg-none">
+                {cart!.items.map((item) => {
+                  const lineImg = getImageUrl(item.productImage);
+                  return (
+                    <div
+                      key={item.id}
+                      className="py-3 border-bottom"
+                      style={{ opacity: updating === item.id ? 0.5 : 1 }}
+                    >
+                      <div className="d-flex gap-2 align-items-start">
+                        <Link href={`/urunler/${item.productId}`} className="flex-shrink-0">
+                          <Image
+                            src={lineImg}
+                            alt={item.productName}
+                            width={88}
+                            height={110}
+                            style={{ objectFit: "cover" }}
+                            unoptimized={isApiHostedMediaSrc(lineImg)}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/images/product-item-1.jpg";
+                            }}
+                          />
+                        </Link>
+                        <div className="flex-grow-1 min-w-0" style={{ minWidth: 0 }}>
+                          <div className="d-flex justify-content-between align-items-start gap-2">
+                            <div className="min-w-0" style={{ minWidth: 0 }}>
                               <Link
                                 href={`/urunler/${item.productId}`}
-                                style={{ color: "#000", textDecoration: "none", fontWeight: 500 }}
+                                className="d-block text-break"
+                                style={{ color: "#000", textDecoration: "none", fontWeight: 500, lineHeight: 1.3 }}
                               >
                                 {item.productName}
                               </Link>
@@ -149,46 +255,64 @@ export default function CartPage() {
                                 </div>
                               )}
                             </div>
-                          </div>
-                        </td>
-                        <td>{item.productPriceString}</td>
-                        <td>
-                          <div className="d-flex align-items-center gap-2">
                             <button
-                              className="btn btn-sm btn-outline-dark"
-                              style={{ width: "32px", height: "32px", padding: 0, borderRadius: 0 }}
-                              onClick={() => handleQuantityChange(item.id, item.productId, item.quantity - 1)}
-                              disabled={updating === item.id || item.quantity <= 1}
-                            >
-                              −
-                            </button>
-                            <span style={{ minWidth: "30px", textAlign: "center" }}>{item.quantity}</span>
-                            <button
-                              className="btn btn-sm btn-outline-dark"
-                              style={{ width: "32px", height: "32px", padding: 0, borderRadius: 0 }}
-                              onClick={() => handleQuantityChange(item.id, item.productId, item.quantity + 1)}
+                              type="button"
+                              className="btn btn-sm border-0 flex-shrink-0"
+                              title="Kaldır"
+                              aria-label="Sepetten kaldır"
+                              onClick={() => handleRemove(item.id)}
                               disabled={updating === item.id}
+                              style={{ color: "#999", minWidth: "44px", minHeight: "44px", lineHeight: 1 }}
                             >
-                              +
+                              ✕
                             </button>
                           </div>
-                        </td>
-                        <td style={{ fontWeight: 600 }}>{item.totalString}</td>
-                        <td>
-                          <button
-                            className="btn btn-sm"
-                            onClick={() => handleRemove(item.id)}
-                            disabled={updating === item.id}
-                            style={{ color: "#999" }}
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                    })}
-                  </tbody>
-                </table>
+                          <div className="d-flex flex-wrap align-items-end justify-content-between gap-2 mt-2">
+                            <div>
+                              {item.compareAtPrice != null && item.compareAtPrice > item.productPrice ? (
+                                <span>
+                                  <del
+                                    className="text-muted small d-block"
+                                    style={{ fontSize: "0.85em" }}
+                                  >
+                                    {item.compareAtPriceString}
+                                  </del>
+                                  <span className="text-danger fw-semibold">{item.productPriceString}</span>
+                                </span>
+                              ) : (
+                                <span className="fw-medium">{item.productPriceString}</span>
+                              )}
+                            </div>
+                            <div className="d-flex align-items-center gap-1">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-dark"
+                                style={{ width: "36px", height: "36px", padding: 0, borderRadius: 0 }}
+                                onClick={() => handleQuantityChange(item.id, item.productId, item.quantity - 1)}
+                                disabled={updating === item.id || item.quantity <= 1}
+                              >
+                                −
+                              </button>
+                              <span style={{ minWidth: "28px", textAlign: "center", fontWeight: 600 }}>
+                                {item.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-dark"
+                                style={{ width: "36px", height: "36px", padding: 0, borderRadius: 0 }}
+                                onClick={() => handleQuantityChange(item.id, item.productId, item.quantity + 1)}
+                                disabled={updating === item.id}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-end fw-bold small mt-2">Satır toplamı: {item.totalString}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

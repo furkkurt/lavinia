@@ -7,6 +7,9 @@ export interface CartItem {
   productImage: string;
   productPrice: number;
   productPriceString: string;
+  compareAtPrice?: number | null;
+  compareAtPriceString?: string | null;
+  percentOfSaving?: number;
   quantity: number;
   total: number;
   totalString: string;

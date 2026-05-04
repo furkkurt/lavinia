@@ -16,6 +16,10 @@ import { colorsInStockForSize, sizesInStockForColor, stockAtMatrix } from "../..
 
 type GallerySlide = { preview: string; full: string; key: string };
 
+function normColorLabel(s: string) {
+  return String(s ?? "").trim().toLowerCase();
+}
+
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -98,7 +102,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const sizeList = useMemo(() => {
     if (!product) return [];
     const s = parseCustomerOptions(product.customerSizeOptions);
-    return s.length > 0 ? s : ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
+    return s.length > 0 ? s : ["Stok", "XS", "S", "M", "L", "XL", "XXL"];
   }, [product]);
 
   const hasMatrix = !!(product?.customerVariantStock?.colors?.length);
@@ -128,11 +132,31 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     return product.stockQuantity ?? 0;
   }, [product, hasMatrix, selectedSize, selectedColor]);
 
+  /** Renk için admin’de bağlanan vitrin görseli (matris satırı veya legacy CustomerColorImages). */
+  const colorHeroUrl = useMemo((): string | null => {
+    if (!product || !selectedColor?.trim()) return null;
+    const nk = normColorLabel(selectedColor);
+    if (hasMatrix && product.customerVariantStock?.colors?.length) {
+      const row = product.customerVariantStock.colors.find((x) => normColorLabel(x.name) === nk);
+      const raw = row?.imageUrl;
+      if (typeof raw === "string" && raw.trim()) return getImageUrl(raw.trim());
+    }
+    const cci =
+      (product as any).customerColorImages ?? (product as any).CustomerColorImages;
+    if (Array.isArray(cci)) {
+      const hit = cci.find((x: any) => normColorLabel(String(x?.color ?? x?.Color ?? "")) === nk);
+      const url = hit?.imageUrl ?? hit?.ImageUrl;
+      if (typeof url === "string" && url.trim()) return getImageUrl(url.trim());
+    }
+    return null;
+  }, [product, selectedColor, hasMatrix]);
+
   useEffect(() => {
     if (!product?.customerVariantStock?.colors?.length) return;
     const m = product.customerVariantStock;
     const cOk = colorsInStockForSize(m, selectedSize);
     const sOk = sizesInStockForColor(m, selectedColor, sizeList);
+
     if (selectedSize && cOk.length === 0) {
       const sz = sizeList.find((s) => colorsInStockForSize(m, s).length > 0);
       if (sz) {
@@ -142,12 +166,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       }
       return;
     }
-    if (cOk.length > 0 && selectedColor && !cOk.includes(selectedColor)) {
-      setSelectedColor(cOk[0]);
-      return;
+
+    if (selectedColor?.trim() && selectedSize?.trim()) {
+      if (sOk.length > 0 && !sOk.includes(selectedSize)) {
+        setSelectedSize(sOk[0]);
+        return;
+      }
     }
-    if (sOk.length > 0 && selectedSize && !sOk.includes(selectedSize)) {
-      setSelectedSize(sOk[0]);
+
+    if (selectedSize?.trim() && selectedColor?.trim() && cOk.length > 0 && !cOk.includes(selectedColor)) {
+      setSelectedColor(cOk[0]);
     }
   }, [product, selectedSize, selectedColor, sizeList]);
 
@@ -205,7 +233,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
         const sizes = parseCustomerOptions(productData?.customerSizeOptions);
         const colors = parseCustomerOptions(productData?.customerColorOptions);
-        const defaultSizes = ["Standart", "XS", "S", "M", "L", "XL", "XXL"];
+        const defaultSizes = ["Stok", "XS", "S", "M", "L", "XL", "XXL"];
         const szList = sizes.length > 0 ? sizes : defaultSizes;
         const mtx = productData?.customerVariantStock;
         if (mtx?.colors?.length) {
@@ -368,16 +396,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <div className="product-preview">
                   <div className="product-main-gallery product-main-stage mb-3 position-relative">
                     {(() => {
-                      const mainUrl =
+                      const galleryMainRaw =
                         galleryItems.length > 0
                           ? galleryItems[Math.min(activeImageIndex, galleryItems.length - 1)].full
                           : product.thumbnailImageUrl;
-                      const mainSrc = getImageUrl(mainUrl);
+                      const mainSrc = colorHeroUrl ?? getImageUrl(galleryMainRaw);
                       return (
                         <>
                           <div className="d-block text-center bg-light position-relative">
                             <img
-                              key={`main-${activeImageIndex}`}
+                              key={`main-${normColorLabel(selectedColor)}-${activeImageIndex}-${colorHeroUrl ? "c" : "g"}`}
                               src={mainSrc}
                               alt={product.name}
                               className="img-fluid"
@@ -473,26 +501,27 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <h1 className="element-title text-uppercase mb-3">{product.name}</h1>
 
                   {(() => {
-                    const sp = product.specialPrice;
-                    const now = new Date();
-                    const hasDiscount = sp && sp > 0 && sp < product.price
-                      && (!product.specialPriceStart || new Date(product.specialPriceStart) <= now)
-                      && (!product.specialPriceEnd || new Date(product.specialPriceEnd) >= now);
+                    const c = product.calculatedProductPrice;
+                    const eff = c?.price ?? product.price;
+                    const old = c?.oldPrice;
+                    const pct = c?.percentOfSaving;
+                    const show = old != null && old > eff;
                     return (
                       <div className="product-price mb-4">
-                        {hasDiscount ? (
+                        {show ? (
                           <>
-                            <span className="badge bg-success me-2">%{Math.round((1 - sp / product.price) * 100)} İndirim</span>
-                            <del className="text-muted me-2">₺{product.price.toFixed(2)}</del>
-                            <strong className="text-danger fs-4">₺{sp.toFixed(2)}</strong>
+                            <span className="badge bg-success me-2">
+                              %{pct && pct > 0 ? pct : Math.round((1 - eff / old) * 100)} İndirim
+                            </span>
+                            <del className="text-muted me-2">₺{old.toFixed(2)}</del>
+                            <strong className="text-danger fs-4">₺{Number(eff).toFixed(2)}</strong>
                           </>
                         ) : (
-                          <>
-                            <strong>{product.price ? `₺${product.price.toFixed(2)}` : "Fiyat Belirtilmemiş"}</strong>
-                            {product.oldPrice && product.oldPrice > product.price && (
-                              <del className="ms-2 text-muted">₺{product.oldPrice.toFixed(2)}</del>
-                            )}
-                          </>
+                          <strong>
+                            {eff != null && eff > 0
+                              ? `₺${Number(eff).toFixed(2)}`
+                              : "Fiyat Belirtilmemiş"}
+                          </strong>
                         )}
                       </div>
                     );
@@ -526,7 +555,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                               disabled={oos}
                               title={oos ? "Bu bedende seçili renk için stok yok" : undefined}
                               onClick={() => {
-                                if (!oos) setSelectedSize(sz);
+                                if (oos) return;
+                                setSelectedSize(sz);
+                                if (hasMatrix && m && selectedColor) {
+                                  const cols = colorsInStockForSize(m, sz);
+                                  if (cols.length > 0 && !cols.includes(selectedColor)) {
+                                    setSelectedColor(cols[0]);
+                                  }
+                                }
                               }}
                             >
                               {sz}
@@ -543,25 +579,42 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                         <div className="d-flex flex-wrap gap-2" role="group" aria-label="Renk seçimi">
                           {colorsForUi.map((c) => {
                             const m = product.customerVariantStock;
-                            const qty =
+                            const qtyAtCurSize =
                               hasMatrix && m && selectedSize
                                 ? stockAtMatrix(m, c, selectedSize)
                                 : null;
-                            const oos =
+                            const oosAtCurSize =
                               hasMatrix &&
+                              m &&
                               selectedSize != null &&
                               selectedSize !== "" &&
-                              (qty ?? 0) < 1;
+                              (qtyAtCurSize ?? 0) < 1;
+                            const availSizes =
+                              hasMatrix && m ? sizesInStockForColor(m, c, sizeList) : null;
+                            const fullyOos = hasMatrix && m && availSizes != null && availSizes.length === 0;
                             return (
                               <button
                                 key={c}
                                 type="button"
-                                className={`btn btn-sm rounded-0 px-3 py-2 ${selectedColor === c ? "btn-dark" : "btn-outline-secondary border-dark"}${oos ? " opacity-50" : ""}`}
+                                className={`btn btn-sm rounded-0 px-3 py-2 ${selectedColor === c ? "btn-dark" : "btn-outline-secondary border-dark"}${oosAtCurSize || fullyOos ? " opacity-50" : ""}`}
                                 style={{ minWidth: "2.75rem" }}
-                                disabled={oos}
-                                title={oos ? "Bu renkte seçili beden için stok yok" : undefined}
+                                disabled={!!fullyOos}
+                                title={
+                                  fullyOos
+                                    ? "Bu renkte hiç stok yok"
+                                    : oosAtCurSize
+                                      ? "Seçili bedende stok yok; tıklayınca uygun beden seçilir"
+                                      : undefined
+                                }
                                 onClick={() => {
-                                  if (!oos) setSelectedColor(c);
+                                  if (fullyOos) return;
+                                  setSelectedColor(c);
+                                  if (hasMatrix && m) {
+                                    const avail = sizesInStockForColor(m, c, sizeList);
+                                    if (avail.length > 0) {
+                                      setSelectedSize((sz) => (avail.includes(sz) ? sz : avail[0]));
+                                    }
+                                  }
                                 }}
                               >
                                 {c}

@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Marcellus&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 :root {
   --collections-bg: #f5f3ef;
@@ -193,20 +194,33 @@ h6,
     position: relative;
   }
 
+  /* Viewport-wide panel: fixed below navbar so content is centered on screen (not under narrow <li>) */
   .navbar .mega-menu-wrapper > .mega-menu {
     display: none;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
+    left: 0;
+    right: 0;
     width: 100vw;
     max-width: 100vw;
-    top: 100%;
+    margin-left: 0;
+    transform: none;
+    top: var(--lavinia-mega-top, 5.75rem);
     z-index: 2000;
     margin-top: 0;
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
     background: #fff;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+    animation: laviniaMegaFadeIn 0.2s ease forwards;
+  }
+
+  @keyframes laviniaMegaFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .navbar .mega-menu-wrapper:hover > .mega-menu,
@@ -214,17 +228,23 @@ h6,
     display: block;
   }
 
-  /* Invisible hit area between “MAĞAZA” and panel so the pointer does not “leave” the wrapper */
+  /* Bridge hover gap: fixed strip under nav bar */
   .navbar .mega-menu-wrapper::after {
     content: "";
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
+    left: 0;
+    right: 0;
     width: 100vw;
-    top: 100%;
-    height: 14px;
+    top: var(--lavinia-mega-top, 5.75rem);
+    height: 12px;
+    transform: translateY(-100%);
     z-index: 1999;
+    pointer-events: auto;
   }
+}
+
+.admin-global-search-hit:hover {
+  background-color: #f1f1f0;
 }
 
 /* Admin mobile drawer above page chrome */
@@ -234,6 +254,91 @@ h6,
 
 .admin-mobile-topbar {
   z-index: 1030;
+}
+
+/* Yönetim paneli: nötr, keskin butonlar, Inter */
+.admin-layout {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.admin-layout h1,
+.admin-layout h2,
+.admin-layout h3,
+.admin-layout h4,
+.admin-layout h4.mb-0,
+.admin-layout h5,
+.admin-layout .h1,
+.admin-layout .h2,
+.admin-layout .h3 {
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.admin-layout .btn {
+  border-radius: 0.25rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+  border-width: 1px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.admin-layout .btn-sm {
+  font-size: 0.8125rem;
+  border-radius: 0.2rem;
+}
+
+.admin-layout .btn-primary {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #fff;
+}
+.admin-layout .btn-primary:hover {
+  background: #2d2d2d;
+  border-color: #2d2d2d;
+  color: #fff;
+}
+
+.admin-layout .btn-outline-primary {
+  color: #1a1a1a;
+  border-color: #9ca3af;
+  background: #fff;
+}
+.admin-layout .btn-outline-primary:hover {
+  background: #f9fafb;
+  border-color: #1a1a1a;
+  color: #1a1a1a;
+}
+
+.admin-layout .btn-secondary,
+.admin-layout .btn-outline-light {
+  border-color: #d1d5db;
+}
+
+.admin-layout .admin-btn-primary {
+  background: #1a1a1a;
+  color: #fff;
+  border: 1px solid #1a1a1a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.admin-layout .admin-btn-primary:hover:not(:disabled) {
+  background: #2d2d2d;
+  border-color: #2d2d2d;
+  color: #fff;
+}
+.admin-layout .admin-btn-secondary {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+.admin-layout .admin-btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #111827;
 }
 
 /* Ana sayfa — kategori kartlarında ürün görselleri (çapraz solma) */

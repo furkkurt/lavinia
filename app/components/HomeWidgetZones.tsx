@@ -58,16 +58,17 @@ function mapApiProductToCarousel(p: Record<string, unknown>): CarouselProduct {
 }
 
 function mapGridProductToCarousel(p: Product): CarouselProduct {
-  const priceNum = p.price ?? 0;
-  const sp = p.specialPrice != null ? Number(p.specialPrice) : undefined;
-  const orig = p.oldPrice != null ? Number(p.oldPrice) : undefined;
+  const c = p.calculatedProductPrice;
+  const effective = c?.price != null ? Number(c.price) : Number(p.price ?? 0);
+  const old = c?.oldPrice != null && c.oldPrice !== undefined ? Number(c.oldPrice) : undefined;
+  const hasOff = old != null && old > effective;
   return {
     id: p.id,
     img: getImageUrl(p.thumbnailImageUrl),
     title: p.name ?? "",
-    price: `₺${priceNum.toFixed(2)}`,
-    specialPrice: sp,
-    originalPrice: orig,
+    price: `₺${effective.toFixed(2)}`,
+    specialPrice: hasOff ? effective : undefined,
+    originalPrice: hasOff ? old : undefined,
   };
 }
 

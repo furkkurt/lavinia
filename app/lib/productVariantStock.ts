@@ -1,8 +1,62 @@
 import type { Product } from "./api/products";
 
 export type CustomerVariantStockPayload = {
-  colors: Array<{ name: string; stocks: Record<string, number> }>;
+  colors: Array<{ name: string; stocks: Record<string, number>; imageUrl?: string | null }>;
+  standardSizeLabel?: string;
 };
+
+/**
+ * Public product API returns variant stock as `sizes: [{ size, quantity }]` per color;
+ * admin / internal helpers use `stocks: Record<string, number>`.
+ * Normalize so storefront `stockAtMatrix` and pickers work.
+ */
+export function normalizeCustomerVariantStockFromApi(raw: unknown): CustomerVariantStockPayload | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const colorsRaw = obj.colors ?? obj.Colors;
+  if (!Array.isArray(colorsRaw) || colorsRaw.length === 0) return null;
+
+  const colors: CustomerVariantStockPayload["colors"] = [];
+
+  for (const cRaw of colorsRaw) {
+    if (cRaw == null || typeof cRaw !== "object") continue;
+    const c = cRaw as Record<string, unknown>;
+    const name = String(c.name ?? c.Name ?? "").trim();
+    if (!name) continue;
+
+    let stocks: Record<string, number> = {};
+    const stocksObj = c.stocks ?? c.Stocks;
+    if (stocksObj && typeof stocksObj === "object" && !Array.isArray(stocksObj)) {
+      stocks = normalizeStocksRecord(stocksObj);
+    } else {
+      const sizesArr = c.sizes ?? c.Sizes;
+      if (Array.isArray(sizesArr)) {
+        for (const entry of sizesArr) {
+          if (entry == null || typeof entry !== "object") continue;
+          const e = entry as Record<string, unknown>;
+          const sz = String(e.size ?? e.Size ?? "").trim();
+          if (!sz) continue;
+          const q = e.quantity ?? e.Quantity;
+          const n = typeof q === "number" ? q : parseInt(String(q ?? 0), 10);
+          stocks[sz] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+        }
+      }
+    }
+
+    const imageUrlRaw = c.imageUrl ?? c.ImageUrl;
+    const imageUrl =
+      typeof imageUrlRaw === "string" && imageUrlRaw.trim() ? imageUrlRaw.trim() : undefined;
+
+    colors.push(imageUrl ? { name, stocks, imageUrl } : { name, stocks });
+  }
+
+  if (colors.length === 0) return null;
+
+  const sslRaw = obj.standardSizeLabel ?? obj.StandardSizeLabel;
+  const standardSizeLabel = typeof sslRaw === "string" && sslRaw.trim() ? sslRaw.trim() : undefined;
+
+  return standardSizeLabel ? { colors, standardSizeLabel } : { colors };
+}
 
 /** API / JSON’dan gelen stok değerlerini sayıya çevirir (string "5" vb.). */
 export function normalizeStocksRecord(raw: unknown): Record<string, number> {
@@ -27,6 +81,20 @@ export function pickStockCaseInsensitive(
   const t = label.trim().toLowerCase();
   for (const [k, v] of Object.entries(stocks)) {
     if (k.trim().toLowerCase() === t) return Math.max(0, Math.floor(Number(v) || 0));
+  }
+  /* Varsayılan sütun "Stok" ve eski "Standart" aynı anlama gelir. */
+  if (t === "stok") {
+    for (const [k, v] of Object.entries(stocks)) {
+      if (k.trim().toLowerCase() === "standart") {
+        return Math.max(0, Math.floor(Number(v) || 0));
+      }
+    }
+  } else if (t === "standart") {
+    for (const [k, v] of Object.entries(stocks)) {
+      if (k.trim().toLowerCase() === "stok") {
+        return Math.max(0, Math.floor(Number(v) || 0));
+      }
+    }
   }
   return 0;
 }
@@ -60,6 +128,20 @@ export function variantRowsFromProductMatrix(
       ) as Record<string, number>,
     };
   });
+}
+
+/** Renk × beden matrisindeki tüm hücrelerin toplamı (genel stok alanı için). */
+export function sumVariantMatrixStock(
+  rows: Array<{ stocks: Record<string, number> }>,
+  sizeLabels: string[]
+): number {
+  return rows.reduce((sum, r) => {
+    const rowSum = sizeLabels.reduce(
+      (acc, sz) => acc + Math.max(0, Math.floor(Number(r.stocks[sz]) || 0)),
+      0
+    );
+    return sum + rowSum;
+  }, 0);
 }
 
 function norm(s: string) {

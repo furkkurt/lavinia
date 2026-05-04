@@ -56,6 +56,14 @@ export interface OrderDetail {
   canCancelByCustomer?: boolean;
 }
 
+export type UserOrderShipment = {
+  id: number;
+  orderId: number;
+  trackingNumber?: string | null;
+  createdOn: string;
+  hepsijetTrackingUrl?: string | null;
+};
+
 export interface OrderItemDetail {
   id: number;
   productId: number;
@@ -63,6 +71,9 @@ export interface OrderItemDetail {
   productImage?: string;
   productPrice: number;
   productPriceString: string;
+  /** İndirimli satırda liste/karşılaştırma fiyatı (varsa). */
+  compareAtPrice?: number | null;
+  compareAtPriceString?: string | null;
   quantity: number;
   total: number;
   totalString: string;
@@ -78,6 +89,17 @@ export async function getUserOrders(): Promise<OrderListItem[]> {
 
 export async function getUserOrder(id: number): Promise<OrderDetail | null> {
   const response = await apiFetch<OrderDetail>(`/api/user/orders/${id}`);
+  if (response.error) return null;
+  return response.data || null;
+}
+
+/** Müşteri: siparişe ait kargo / takip numaraları (HepsiJET linki dahil). */
+export async function getUserOrderShipments(
+  orderId: number
+): Promise<{ orderId: number; items: UserOrderShipment[] } | null> {
+  const response = await apiFetch<{ orderId: number; items: UserOrderShipment[] }>(
+    `/api/user/orders/${orderId}/shipments`
+  );
   if (response.error) return null;
   return response.data || null;
 }

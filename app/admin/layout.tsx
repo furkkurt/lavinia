@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { adminLogin, isAdmin, validateToken } from "../lib/api/auth";
 import { removeAuthToken } from "../lib/api/config";
 import { hideOffcanvasById } from "../lib/hideOffcanvas";
+import AdminGlobalSearch from "../components/AdminGlobalSearch";
 
 export default function AdminLayout({
   children,
@@ -289,7 +290,10 @@ export default function AdminLayout({
             Yönetim paneli
           </span>
         </div>
-        <div className="container-fluid px-2 px-md-3 py-3 py-md-4 flex-grow-1 admin-main-inner">{children}</div>
+        <div className="container-fluid px-2 px-md-3 py-3 py-md-4 flex-grow-1 admin-main-inner">
+          <AdminGlobalSearch />
+          {children}
+        </div>
       </main>
     </div>
   );

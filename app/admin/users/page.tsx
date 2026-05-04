@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getUsersGrid, deleteUser, updateUser, User } from "../../lib/api/users";
 
-export default function AdminUsersPage() {
+function AdminUsersPageInner() {
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get("highlightId");
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageIndex, setPageIndex] = useState(0);
@@ -37,6 +40,12 @@ export default function AdminUsersPage() {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageIndex, pageSize]); // Only pageIndex and pageSize as dependencies
+
+  useEffect(() => {
+    if (!highlightId || users.length === 0) return;
+    const el = document.getElementById(`admin-user-row-${highlightId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId, users]);
 
   const handleDelete = async (id: number) => {
     if (!confirm("Bu kullanıcıyı silmek istediğinizden emin misiniz?")) {
@@ -93,7 +102,13 @@ export default function AdminUsersPage() {
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.id}>
+                  <tr
+                    key={user.id}
+                    id={`admin-user-row-${user.id}`}
+                    className={
+                      highlightId === String(user.id) ? "table-warning" : undefined
+                    }
+                  >
                     <td>{user.id}</td>
                     <td>{user.fullName}</td>
                     <td>{user.email}</td>
@@ -197,5 +212,21 @@ export default function AdminUsersPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminUsersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-center py-5">
+          <div className="spinner-border text-secondary" role="status">
+            <span className="visually-hidden">Yükleniyor…</span>
+          </div>
+        </div>
+      }
+    >
+      <AdminUsersPageInner />
+    </Suspense>
   );
 }

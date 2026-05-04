@@ -12,13 +12,14 @@ import {
   createCheckout,
   getCheckoutSummary,
   completeCheckout,
+  completeTestCheckout,
   preparePayTrCheckout,
   CheckoutSummary,
 } from "../lib/api/checkout";
 import { getAddresses, createAddress, UserAddress, AddressFormData, getStates } from "../lib/api/addresses";
 import { getImageUrl, getAuthToken, isApiHostedMediaSrc } from "../lib/api/config";
 import { getEmailFromAuthToken } from "../lib/api/auth";
-import { getPublicShop } from "../lib/api/shop";
+import { getPublicShop, LAVINIA_CHECKOUT_TEST_UI_KEY } from "../lib/api/shop";
 
 type Step = "address" | "summary" | "success";
 
@@ -42,10 +43,14 @@ export default function CheckoutPage() {
   const [orderNote, setOrderNote] = useState("");
   const [orderId, setOrderId] = useState<number | null>(null);
   const [orderTotal, setOrderTotal] = useState("");
+  const [lastOrderWasTest, setLastOrderWasTest] = useState(false);
   const [provinces, setProvinces] = useState<{ id: number; name: string }[]>([]);
   /** PayTR iFrame API: get-token sonrası `/odeme/guvenli/{token}` */
   const [paytrIframeToken, setPaytrIframeToken] = useState<string | null>(null);
   const [payEmail, setPayEmail] = useState("");
+  const [testCheckoutApi, setTestCheckoutApi] = useState(false);
+  const [devTestOrderUi, setDevTestOrderUi] = useState(false);
+  const showTestOrderButton = testCheckoutApi && devTestOrderUi;
 
   useEffect(() => {
     const preloader = document.querySelector(".preloader");
@@ -74,9 +79,18 @@ export default function CheckoutPage() {
 
   const isGuest = typeof window !== "undefined" && !getAuthToken();
 
+  useEffect(() => {
+    try {
+      setDevTestOrderUi(typeof window !== "undefined" && localStorage.getItem(LAVINIA_CHECKOUT_TEST_UI_KEY) === "1");
+    } catch {
+      setDevTestOrderUi(false);
+    }
+  }, []);
+
   const init = async () => {
     setLoading(true);
     const shop = await getPublicShop();
+    setTestCheckoutApi(!!shop.testCheckoutEnabled);
     if (!shop.salesEnabled) {
       router.replace("/sepet");
       setLoading(false);
@@ -150,6 +164,33 @@ export default function CheckoutPage() {
     setSubmitting(false);
   };
 
+  const handleTestComplete = async () => {
+    if (!checkoutId) return;
+    setSubmitting(true);
+    setError(null);
+    const result = isGuest
+      ? await completeTestCheckout(checkoutId, 0, orderNote, {
+          contactName: newAddress.contactName,
+          phone: newAddress.phone,
+          addressLine1: newAddress.addressLine1,
+          addressLine2: newAddress.addressLine2,
+          city: newAddress.city || "",
+          zipCode: newAddress.zipCode,
+          stateOrProvinceId: newAddress.stateOrProvinceId,
+          countryId: newAddress.countryId || "TR",
+        })
+      : await completeTestCheckout(checkoutId, selectedAddressId, orderNote, undefined);
+    if (result.success && result.data) {
+      setOrderId(result.data.orderId);
+      setOrderTotal(result.data.orderTotalString);
+      setLastOrderWasTest(true);
+      setStep("success");
+    } else {
+      setError(result.error || "Test siparişi oluşturulamadı (API’de test modu kapalı olabilir).");
+    }
+    setSubmitting(false);
+  };
+
   const handleComplete = async () => {
     if (!checkoutId) return;
     setSubmitting(true);
@@ -170,6 +211,7 @@ export default function CheckoutPage() {
     if (result.success && result.data) {
       setOrderId(result.data.orderId);
       setOrderTotal(result.data.orderTotalString);
+      setLastOrderWasTest(false);
       setStep("success");
     } else {
       setError(result.error || "Sipariş oluşturulamadı");
@@ -433,6 +475,25 @@ export default function CheckoutPage() {
             <div className="col-lg-8">
               <h4 style={{ fontFamily: "var(--font-marcellus)", marginBottom: "20px" }}>Sipariş Özeti</h4>
 
+              {showTestOrderButton && (
+                <div className="alert alert-warning border-0 mb-4" style={{ borderRadius: 0 }}>
+                  <strong>Dev test siparişi</strong>
+                  <p className="small mb-2 mt-1 mb-3">
+                    Stok azaltılmaz; PayTR gerekmez. Yönetimde <code>Checkout:TestCheckoutEnabled</code> açık
+                    olmalı; ayrıca <code>/admin/dev</code> üzerinden bu tarayıcıda test butonu etkinleştirildi.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-dark"
+                    style={{ borderRadius: 0 }}
+                    onClick={() => void handleTestComplete()}
+                    disabled={submitting}
+                  >
+                    {submitting ? "Oluşturuluyor…" : "Test siparişi — ödeme yok, stok düşmez"}
+                  </button>
+                </div>
+              )}
+
               {displayAddr && (
                 <div className="p-3 mb-4" style={{ border: "1px solid #e5e5e5", background: "#fafafa" }}>
                   <small className="text-muted d-block mb-1">Teslimat Adresi</small>
@@ -473,7 +534,18 @@ export default function CheckoutPage() {
                           </div>
                         </td>
                         <td>{item.quantity}</td>
-                        <td>{item.totalString}                        </td>
+                        <td>
+                          {item.compareAtPrice != null && item.compareAtPrice > item.productPrice ? (
+                            <div>
+                              <div className="small text-muted text-decoration-line-through">
+                                {item.compareAtPriceString} × {item.quantity}
+                              </div>
+                              <div className="text-danger fw-semibold">{item.totalString}</div>
+                            </div>
+                          ) : (
+                            item.totalString
+                          )}
+                        </td>
                       </tr>
                     );
                     })}
@@ -622,6 +694,11 @@ export default function CheckoutPage() {
           <div className="text-center py-5">
             <div style={{ fontSize: "64px", marginBottom: "20px" }}>✓</div>
             <h3 style={{ fontFamily: "var(--font-marcellus)" }}>Siparişiniz Alındı!</h3>
+            {lastOrderWasTest && (
+              <p className="small text-dark">
+                <strong>Test siparişi</strong> — stok değişmedi, ödeme alınmadı.
+              </p>
+            )}
             <p className="text-muted mt-3">
               Sipariş numaranız: <strong>#{orderId}</strong>
             </p>
